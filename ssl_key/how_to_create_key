@@ -1,0 +1,6 @@
+$ openssl genrsa -des3 -passout pass:x -out server.pass.key 2048
+$ openssl rsa -passin pass:x -in server.pass.key -out server.key
+$ openssl req -new -key server.key -out server.csr
+$ openssl x509 -req -days 365 -in server.csr -signkey server.key -out server.crt
+
+$ keytool -import -alias codeproject -file C:\codeproject\codeprojectsslcert.cer -keystore C:\codeproject\codeprojectssl.bks -storetype BKS -providerClass org.bouncycastle.jce.provider.BouncyCastleProvider -providerpath C:\codeproject\bcprov-jdk15on-146.jar

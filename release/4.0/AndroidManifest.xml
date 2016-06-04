@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+      package="com.andromeda.androbench2"
+      android:versionName="4.0" android:versionCode="12">
+    <application android:icon="@drawable/icon" android:label="AndroBench">   
+        <activity android:name="com.andromeda.androbench2.main"
+                  android:label="AndroBench" android:screenOrientation="portrait" android:theme="@android:style/Theme.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+        <activity android:name="com.andromeda.androbench2.Startupbench">
+        </activity>
+        <activity android:name="com.andromeda.androbench2.Result">
+        </activity>
+    	<activity android:name="com.andromeda.androbench2.Setting">
+    	</activity>
+		<activity android:name="com.andromeda.androbench2.History">
+		</activity>
+		<activity android:theme="@android:style/Theme.NoTitleBar" android:screenOrientation="portrait" android:name="com.andromeda.androbench2.SplashActivity"/>
+		
+        
+<activity android:name="com.andromeda.androbench2.Ranking" android:theme="@android:style/Theme.NoTitleBar" android:screenOrientation="portrait"></activity>
+</application>
+    <uses-sdk android:minSdkVersion="7" />
+
+<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"></uses-permission>
+
+
+
+<uses-permission android:name="android.permission.PERSISTENT_ACTIVITY"></uses-permission>
+<uses-permission android:name="android.permission.INTERNET"></uses-permission>
+</manifest> 

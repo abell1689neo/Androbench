@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+  xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="fill_parent"
+  android:layout_height="fill_parent"
+  android:padding="10dp"
+  android:orientation="vertical">
+  <TextView
+	android:text="Read(MB) - Recommend 32MB"
+	android:layout_width="wrap_content"
+	android:layout_height="wrap_content">
+	</TextView>
+  <EditText
+  	android:id="@+id/et_setting_readfilesize"
+  	android:layout_width="100dp"
+  	android:layout_height="45dp"
+  	android:inputType="number"
+  	/>
+  <TextView
+	android:text="Write(MB) - Recommend 2MB"
+	android:layout_width="wrap_content"
+	android:layout_height="wrap_content">
+	</TextView>
+  <EditText
+  	android:id="@+id/et_setting_writefilesize"
+  	android:layout_width="100dp"
+  	android:layout_height="45dp"
+  	android:inputType="number"
+  	/>
+  <TextView
+	android:id="@+id/et_setting_info"
+	android:layout_width="wrap_content"
+	android:layout_height="wrap_content">
+	</TextView>
+</LinearLayout>

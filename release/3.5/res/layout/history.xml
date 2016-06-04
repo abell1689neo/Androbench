@@ -1,0 +1,92 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+	    android:orientation="vertical"
+	    android:layout_width="fill_parent"
+	    android:layout_height="fill_parent"
+	    >
+	    
+	<LinearLayout
+		android:orientation="vertical"
+	  	android:layout_width="fill_parent"
+		android:layout_height="wrap_content"
+		android:background="#666666">
+		<FrameLayout
+			android:layout_width="fill_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="5dp"
+			android:layout_marginBottom="5dp">
+			<TextView
+				android:text="History"
+				android:textSize="18dp"
+				android:textColor="#ffcc00"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginLeft="20dp"
+				android:layout_gravity="left|center_vertical"
+				/>
+			<ImageView
+				android:src="@drawable/logo"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginRight="10dp"
+				android:layout_gravity="right"
+				/>
+		</FrameLayout>
+	</LinearLayout>
+	
+	<LinearLayout
+		android:orientation="vertical"
+	  	android:layout_width="fill_parent"
+		android:layout_height="wrap_content"
+		android:layout_margin="5dp">
+		<FrameLayout
+			android:layout_width="fill_parent"
+			android:layout_height="wrap_content"
+			android:layout_marginTop="5dp"
+			android:layout_marginBottom="5dp">
+			<TextView
+				android:id="@+id/RecentBenchmarking"
+				android:text="Recent benchmarking\n(No history)"
+				android:textColor="#aaaaaa"
+				android:layout_width="wrap_content"
+				android:layout_height="wrap_content"
+				android:layout_marginRight="10dp"
+				android:layout_gravity="right|center_vertical"
+				/>
+			<Button
+			  	android:id="@+id/btnClearHistory"
+			  	android:text="Clear History"
+			  	android:layout_width="130dp"
+			  	android:layout_height="40dp"
+			  	android:layout_marginRight="10dp"
+			  	android:layout_gravity="left|center_vertical"
+			  	android:background="@drawable/btn_history_click"
+			  	/>
+		</FrameLayout>
+	</LinearLayout>
+	
+	<LinearLayout
+		android:background="@drawable/divide_line"
+		android:layout_width="fill_parent"
+		android:layout_height="wrap_content"
+		/>
+	    
+	<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+			android:layout_width="fill_parent"
+			android:layout_height="fill_parent">
+		<TextView
+			android:id="@+id/HistoryMessage"
+			android:layout_width="fill_parent"
+			android:layout_height="fill_parent"
+			android:textColor="#0099ff"
+			android:textSize="15dp"
+			android:gravity="center_vertical|center_horizontal"
+			/>
+		<ListView
+			android:id="@+id/HistoryListView"
+		 	android:layout_width="fill_parent"
+		 	android:layout_height="wrap_content"
+		 	android:cacheColorHint="#eeeeee"
+			/>
+	</FrameLayout>
+	
+</LinearLayout>

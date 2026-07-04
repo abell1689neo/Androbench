@@ -1,0 +1,5 @@
+# ninja log v5
+2	1017	1783153126359978485	CMakeFiles/androbench_jni.dir/androbench_jni.c.o	5e611596f826b233
+1019	1290	1783153126641570796	/Users/user/androbench-4.1/AndroBench16/app/build/intermediates/cxx/Debug/394w4v2n/obj/arm64-v8a/libandrobench_jni.so	1c4aa2009a3a26f0
+8	469	1783156949630374563	CMakeFiles/androbench_jni.dir/androbench_jni.c.o	5e611596f826b233
+469	613	1783156949778230940	/Users/user/androbench-4.1/AndroBench16/app/build/intermediates/cxx/Debug/394w4v2n/obj/arm64-v8a/libandrobench_jni.so	1c4aa2009a3a26f0

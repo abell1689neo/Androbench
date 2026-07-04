@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "kr.ac.snu.csl.androbench.app-mergeDebugResources-44:/values-v30/values-v30.xml",
+            "map": [
+                {
+                    "source": "/Users/user/.gradle/caches/8.13/transforms/34699632f65a5a88e71627610b70d6b9/transformed/material3-release/res/values-v30/values-v30.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "72",
+                        "endOffsets": "123"
+                    }
+                }
+            ]
+        }
+    ]
+}

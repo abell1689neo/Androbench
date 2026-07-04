@@ -1,0 +1,26 @@
+# ninja log v5
+0	160	1779125999969744848	CMakeFiles/androbench_jni.dir/androbench_jni.c.o	5e611596f826b233
+161	205	1779126000014660432	/Users/user/androbench-4.1/AndroBench16/app/build/intermediates/cxx/Debug/6pj672p1/obj/arm64-v8a/libandrobench_jni.so	707ab4baf4d4914c
+0	18	0	clean	2eed3f069cd9e164
+1	416	1779157146585764590	CMakeFiles/androbench_jni.dir/androbench_jni.c.o	5e611596f826b233
+417	591	1779157146762407972	/Users/user/androbench-4.1/AndroBench16/app/build/intermediates/cxx/Debug/6pj672p1/obj/arm64-v8a/libandrobench_jni.so	707ab4baf4d4914c
+0	12	0	clean	2eed3f069cd9e164
+0	1921	1779157541900184233	CMakeFiles/androbench_jni.dir/androbench_jni.c.o	5e611596f826b233
+1921	2709	1779157542685580830	/Users/user/androbench-4.1/AndroBench16/app/build/intermediates/cxx/Debug/6pj672p1/obj/arm64-v8a/libandrobench_jni.so	707ab4baf4d4914c
+0	22	0	clean	2eed3f069cd9e164
+0	783	1779157924141353904	CMakeFiles/androbench_jni.dir/androbench_jni.c.o	5e611596f826b233
+783	1117	1779157924476794326	/Users/user/androbench-4.1/AndroBench16/app/build/intermediates/cxx/Debug/6pj672p1/obj/arm64-v8a/libandrobench_jni.so	707ab4baf4d4914c
+1	592	1779183856806982025	CMakeFiles/androbench_jni.dir/androbench_jni.c.o	5e611596f826b233
+592	778	1779183856995204251	/Users/user/androbench-4.1/AndroBench16/app/build/intermediates/cxx/Debug/6pj672p1/obj/arm64-v8a/libandrobench_jni.so	707ab4baf4d4914c
+1	381	1779184082237317758	CMakeFiles/androbench_jni.dir/androbench_jni.c.o	5e611596f826b233
+382	543	1779184082402475320	/Users/user/androbench-4.1/AndroBench16/app/build/intermediates/cxx/Debug/6pj672p1/obj/arm64-v8a/libandrobench_jni.so	707ab4baf4d4914c
+1	345	1779184300952449752	CMakeFiles/androbench_jni.dir/androbench_jni.c.o	5e611596f826b233
+345	482	1779184301089518998	/Users/user/androbench-4.1/AndroBench16/app/build/intermediates/cxx/Debug/6pj672p1/obj/arm64-v8a/libandrobench_jni.so	707ab4baf4d4914c
+1	403	1779184566570593564	CMakeFiles/androbench_jni.dir/androbench_jni.c.o	5e611596f826b233
+403	550	1779184566719474472	/Users/user/androbench-4.1/AndroBench16/app/build/intermediates/cxx/Debug/6pj672p1/obj/arm64-v8a/libandrobench_jni.so	707ab4baf4d4914c
+1	448	1781674246243478385	CMakeFiles/androbench_jni.dir/androbench_jni.c.o	5e611596f826b233
+448	1521	1781674247316104624	/Users/user/androbench-4.1/AndroBench16/app/build/intermediates/cxx/Debug/6pj672p1/obj/arm64-v8a/libandrobench_jni.so	707ab4baf4d4914c
+1	285	1781678117791550450	CMakeFiles/androbench_jni.dir/androbench_jni.c.o	5e611596f826b233
+285	595	1781678118019085404	/Users/user/androbench-4.1/AndroBench16/app/build/intermediates/cxx/Debug/6pj672p1/obj/arm64-v8a/libandrobench_jni.so	707ab4baf4d4914c
+0	493	1782779716844640145	CMakeFiles/androbench_jni.dir/androbench_jni.c.o	5e611596f826b233
+493	670	1782779717023403721	/Users/user/androbench-4.1/AndroBench16/app/build/intermediates/cxx/Debug/6pj672p1/obj/arm64-v8a/libandrobench_jni.so	707ab4baf4d4914c

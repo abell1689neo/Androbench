@@ -1,0 +1,3 @@
+ninja: Entering directory `/Users/user/androbench-4.1/AndroBench16/app/.cxx/Debug/394w4v2n/arm64-v8a'
+[1/2] Building C object CMakeFiles/androbench_jni.dir/androbench_jni.c.o
+[2/2] Linking C shared library /Users/user/androbench-4.1/AndroBench16/app/build/intermediates/cxx/Debug/394w4v2n/obj/arm64-v8a/libandrobench_jni.so

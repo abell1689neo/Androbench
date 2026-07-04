@@ -788,9 +788,10 @@ public class Result extends Activity {
     
     
     // Benchmarks thread (Doing micro, SQLite and macro benchmarks)
+	//실제 benchmark 실행하는 thread 생산
     public class Thread_Benchmark extends Thread{
     	
-    	public void preExcute(){
+    	public void preExcute(){//준비 (sqlite table empty)
     		getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     		
     		processing = true;
@@ -832,7 +833,7 @@ public class Result extends Activity {
             
     	}
     	
-    	public void postExcute(){
+    	public void postExcute(){//after running 
     		String curDate;
     		String curTarget;
     		String useBuffer;
@@ -912,15 +913,17 @@ public class Result extends Activity {
             getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     	}
     	   	
-    	public void run(){
-    		preExcute();
+    	public void run(){//본체
+    		preExcute();//준비
 
+			//1.microbench: seq r/w + rand r/w
     		if(flag_microbench){ 					
 				changeDialog(PROC_INIT, 0);
-	  
+				
 	   			/*******************************************************************************************
 	   			 * Micro benchmarks :: Initializing for sequential & random read benchmarks 
 	   			 *******************************************************************************************/
+				//테스트 파일 생성 -> read의 읽을 대상
 	    		INIT_READ(test_target, MemoryStatus.getSDExternalPath() + TARGET_PATH, test_file_flag , MBYTE, test_file_size_read);
 	    		
 	   			/*******************************************************************************************
@@ -940,11 +943,12 @@ public class Result extends Activity {
 	    		    		
 	    		for(cntTesting=0; cntTesting<number_of_testing; cntTesting++){   			
 	    			if(test_file_flag == 0){
-	    				PURGE_CACHE((((MemoryStatus.getTotalMem()/KBYTE)/2) + 50)*MBYTE);
+	    				PURGE_CACHE((((MemoryStatus.getTotalMem()/KBYTE)/2) + 50)*MBYTE);//캐시 비우기
 	    			}
 	    			
 	    			seq_read_time[cntTesting] = SEQ_READ(test_target, MemoryStatus.getSDExternalPath() + TARGET_PATH, test_file_flag, test_buffer_size_seq, test_file_size_read);
 	            	
+					//함수 호출
 	            	if(seq_read_time[cntTesting] == -1){
 	            		toast.setText("ERROR_NOT_OPEN");
 	            		toast.show();
@@ -962,6 +966,7 @@ public class Result extends Activity {
 	            		toast.show();
 	            		break;
 	            	}else{
+						//처리량 계산
 	           			perf_mbps = (double)(test_file_size_read / (1024*1024)) / (seq_read_time[cntTesting] / (double)1000000);
 	           			total_perf_mbps += perf_mbps;
 	           			avg_perf_mbps_sr = (int)(total_perf_mbps/(double)(cntTesting+1)*100)/(double)100;
@@ -1085,7 +1090,7 @@ public class Result extends Activity {
 	            }
     		}
 
-    		
+    		//2. sqlite benchmark
     		if(flag_sqlitebench){
     			changeDialog(PROC_SQLITE_INSERT, 0);
     			List<Object> shNum = new ArrayList<Object>();
@@ -1165,6 +1170,7 @@ public class Result extends Activity {
 	            testSQLite.close();
     		}
     		
+			//3. macro benchmark
     		if(flag_macro){
     			long temp_total_time = 0;
     			int scriptLine = 0;
@@ -1265,7 +1271,7 @@ public class Result extends Activity {
 	    		avg_macro_camcorder = (int)(temp_total_time/(double)(cntTesting+1)*100)/(double)100;
     		}
 
-            postExcute();
+            postExcute();//마무리
     	}
     }
     

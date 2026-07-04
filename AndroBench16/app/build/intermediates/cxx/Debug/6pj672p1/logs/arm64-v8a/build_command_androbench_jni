@@ -1,0 +1,4 @@
+/Users/user/Library/Android/sdk/cmake/3.22.1/bin/ninja \
+  -C \
+  /Users/user/androbench-4.1/AndroBench16/app/.cxx/Debug/6pj672p1/arm64-v8a \
+  androbench_jni

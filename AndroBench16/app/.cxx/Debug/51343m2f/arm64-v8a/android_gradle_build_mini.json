@@ -1,0 +1,27 @@
+{
+  "buildFiles": [
+    "/Users/user/androbench-4.1/AndroBench16/app/src/main/cpp/CMakeLists.txt"
+  ],
+  "cleanCommandsComponents": [
+    [
+      "/Users/user/Library/Android/sdk/cmake/3.22.1/bin/ninja",
+      "-C",
+      "/Users/user/androbench-4.1/AndroBench16/app/.cxx/Debug/51343m2f/arm64-v8a",
+      "clean"
+    ]
+  ],
+  "buildTargetsCommandComponents": [
+    "/Users/user/Library/Android/sdk/cmake/3.22.1/bin/ninja",
+    "-C",
+    "/Users/user/androbench-4.1/AndroBench16/app/.cxx/Debug/51343m2f/arm64-v8a",
+    "{LIST_OF_TARGETS_TO_BUILD}"
+  ],
+  "libraries": {
+    "androbench_jni::@6890427a1f51a3e7e1df": {
+      "artifactName": "androbench_jni",
+      "abi": "arm64-v8a",
+      "output": "/Users/user/androbench-4.1/AndroBench16/app/build/intermediates/cxx/Debug/51343m2f/obj/arm64-v8a/libandrobench_jni.so",
+      "runtimeFiles": []
+    }
+  }
+}

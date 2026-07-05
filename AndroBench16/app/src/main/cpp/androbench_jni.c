@@ -198,7 +198,7 @@ static jlong seq_access(JNIEnv* env, jstring path,
     memset(buf, 0x5A, (size_t)reclen);
 
     //2. pick mode
-    int base_flags=is_write?(O_WRONLY|O_DSYNC):O_RDONLY;
+    int base_flags=is_write? O_WRONLY:O_RDONLY;
     //need dsync, since real latency after writing to the disk should be measured
     char filename[MAX_PATH_LEN];
     int used_direct=0;
@@ -246,6 +246,9 @@ static jlong seq_access(JNIEnv* env, jstring path,
             (*env)->ReleaseStringUTFChars(env, path, dir);
             return is_write ? ERR_WRITE: ERR_READ;
         }
+    }
+    if(is_write){
+        fdatasync(pfd[0]);
     }
     long long elapsed_ns=now_ns()-start_ns;
 
@@ -401,7 +404,7 @@ static jlong rnd_access(JNIEnv* env, jstring path,
     }
     memset(shared_buf, 0x5A, (size_t)reclen*(size_t)num_thread);
 
-    int base_flags=is_write? (O_WRONLY|O_DSYNC):O_RDONLY;
+    int base_flags=is_write? O_WRONLY:O_RDONLY;
 
     char filename[MAX_PATH_LEN];
     int used_direct=0;
@@ -458,6 +461,11 @@ static jlong rnd_access(JNIEnv* env, jstring path,
 
     for(int k=0; k<num_thread; k++){
         pthread_join(tids[k], NULL); //wait for all threads to terminate
+    }
+    if(is_write){
+        for(int k=0; k<num_thread; k++){
+            fdatasync(tdata[k].fd);
+        }
     }
 
     long long elapsed_ns=now_ns()-start_ns;

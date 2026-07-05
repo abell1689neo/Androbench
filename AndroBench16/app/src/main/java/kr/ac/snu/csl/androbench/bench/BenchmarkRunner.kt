@@ -224,9 +224,9 @@ class BenchmarkRunner(private val context: Context) {
             "--rw=$rwArg",
             "--bs=${blockSize}k",
             "--size=${config.fileSizeKb}k",
-            //"--filename=$testFile",
             "--direct=1",//o_direct
-            "--fdatasync=1",
+            //"--fdatasync=1",
+            //"--end_fsync=1",
             "--ioengine=psync",//why psync?
             "--thread",
             "--numjobs=$numjobs",
@@ -239,6 +239,14 @@ class BenchmarkRunner(private val context: Context) {
             //"--time_based",
             //"--ramp_time=2",//eliminate warmup effect
         )
+        //per-loop fdatasync
+        val opsPerLoop=if(isRandom){
+            config.rndMaxRecs
+        }else{
+            config.fileSizeKb/config.seqReclenKb
+        }
+        args.add("--fdatasync=$opsPerLoop")
+        
         if(isRandom){
             //per thread file
             args.add("--directory=${config.targetPath}")

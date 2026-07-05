@@ -233,7 +233,7 @@ class BenchmarkRunner(private val context: Context) {
             "--loops=${config.numIterations}",
             "--group_reporting",
             "--randrepeat=0", //random seed renewal
-            "--unlink=1" //file cleanup
+            "--unlink=1", //file cleanup within jobs(loop 끝에서)
             //"--sync=1",//o_sync
             //"--runtime=${config.fioRuntime}",
             //"--time_based",

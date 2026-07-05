@@ -55,6 +55,30 @@ static void free_aligned(char *p, size_t bytes){
     if(p) munmap(p, bytes);
 }
 
+static int pwrite_all(int fd, const char* buf, size_t len, off_t offset){
+    size_t done=0;
+    while(done<len){
+        ssize_t r=pwrite(fd,buf+done, len-done, offset+(off_t)done);
+        if(r<0) return-1;
+        done+=(size_t)r;
+    }
+    return 0;
+}
+
+static int pread_all(int fd, char* buf, size_t len, off_t offset){
+    size_t done=0;
+    while(done<len){
+        ssize_t r=pread(fd, buf+done, len-done, offset+(off_t)done);
+        if(r<=0){
+            LOGE("pread_all FAILED: r=%zd errno=%d (%s) fd=%d len=%zu done=%zu offset=%lld",
+                 r, errno, strerror(errno), fd, len, done, (long long)(offset+done));
+            return-1;
+        }
+        done+=(size_t)r;
+    }
+    return 0;
+}
+
 static int write_all(int fd, const char* buf, size_t len){ //partial write
     size_t done=0;
     while(done<len){
@@ -215,7 +239,7 @@ static jlong seq_access(JNIEnv* env, jstring path,
         }
         pfd[k]=fd;
     }
-    sync(); //디스크 동기화
+    //sync(); //디스크 동기화
 
     //3. measurement
     long long start_ns=now_ns();
@@ -322,14 +346,11 @@ static void* rnd_worker(void* arg){
     //3. IO occurs: start concurrently on main signal
     struct timespec t1, t2;
     for(int i=0; i<td->maxrecs&&!g_done_flag; i++){ //until maxrecs amount is processed
+        off_t offset = (off_t)td->offsets[i] * (off_t)td->reclen;
         clock_gettime(CLOCK_MONOTONIC, &t1);//start time
-        if(lseek(td->fd, td->offsets[i]*td->reclen, SEEK_SET)<0 ){//jump to random offset in the file
-            g_done_flag=1;
-            return (void*)(intptr_t)ERR_READ;
-        }
         int rc=td->is_write
-            ? write_all(td->fd, td->buf, (size_t)td->reclen) //random read
-            : read_all (td->fd, td-> buf, (size_t)td->reclen);
+            ? pwrite_all(td->fd, td->buf, (size_t)td->reclen, offset) //random read
+            : pread_all (td->fd, td-> buf, (size_t)td->reclen, offset);
 
         clock_gettime(CLOCK_MONOTONIC, &t2);
         
@@ -450,7 +471,7 @@ static jlong rnd_access(JNIEnv* env, jstring path,
                 return ERR_ALLOC;
         }
     }
-    sync();
+    //sync();
 
     //wait for all workers to reach the barrier
     while(g_barrier_status<num_thread) sched_yield();

@@ -20,7 +20,7 @@ data class BenchmarkConfig(
     val fileSizeKb: Int=2097152,  //2 GB — Pixel 9 어디서나 안전 (NativeIO 4 threads × 2 GB = 8 GB)
     val numThreads: Int=4,         //4 — Random parallelism QD=4 + NativeIO 디스크 8 GB
     val rndMaxRecs: Int=16384,     //working set = 4 × 16384 × 4 KB = 256 MB ≥ SRAM 64 MB
-    val numIterations: Int=3,
+    val numIterations: Int=5,
     val sqliteOperations: Int=1024,
     val mode: BenchmarkMode = BenchmarkMode.ALL,
 )

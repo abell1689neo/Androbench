@@ -1,0 +1,17 @@
+# OS / editor
+.DS_Store
+.metals/
+.vscode/
+.idea/
+*.iml
+
+# Gradle / Android build artifacts
+.gradle/
+build/
+.cxx/
+local.properties
+captures/
+*.hprof
+
+# Office temp lock files
+~$*

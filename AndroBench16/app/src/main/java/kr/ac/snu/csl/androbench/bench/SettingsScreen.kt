@@ -109,6 +109,32 @@ fun SettingsCard(
             )
         }
 
+        // ── Sustained (fio steady-state) ──
+        GroupLabel("Sustained (fio steady-state)")
+
+        SettingSection(title = "Sustained", icon = Icons.Default.Timeline) {
+            ChipSetting(
+                label = "Seq Write jobs (1 = benchmark · 8+ = 고압 hill 관측)",
+                options = listOf(1, 2, 4, 8, 16),
+                current = config.sustainedSeqWriteJobs,
+                onChange = { onConfigChange(config.copy(sustainedSeqWriteJobs = it)) },
+            )
+            ChipSetting(
+                label = "Read runtime (초)",
+                options = listOf(30, 60, 120, 180),
+                current = config.sustainedReadRuntimeSec,
+                onChange = { onConfigChange(config.copy(sustainedReadRuntimeSec = it)) },
+                unitLabel = " s",
+            )
+            ChipSetting(
+                label = "Write runtime (초)",
+                options = listOf(60, 120, 180, 300),
+                current = config.sustainedWriteRuntimeSec,
+                onChange = { onConfigChange(config.copy(sustainedWriteRuntimeSec = it)) },
+                unitLabel = " s",
+            )
+        }
+
         // ── SQLite only ──
         GroupLabel("SQLite only")
 
@@ -284,9 +310,9 @@ fun validateConfig(c: BenchmarkConfig): String? {
         return "SQLite ops ≥ 1"
     if (c.numIterations < 1)
         return "Iterations ≥ 1"
-    // total disk usage warning (8 thread × 4 GB = 32 GB 등)
+    // total disk usage warning — hill 관측 config(nj16×4GB=64GB)를 허용하도록 128GB로 완화
     val totalUsageMB = c.numThreads.toLong() * c.fileSizeKb / 1024
-    if (totalUsageMB > 32 * 1024)
+    if (totalUsageMB > 128 * 1024)
         return "Total file usage ${totalUsageMB / 1024} GB — check device free space"
     return null
 }

@@ -81,6 +81,9 @@ private fun IdleContent(
             BenchmarkMode.FIO_SEQ_WRITE, BenchmarkMode.FIO_RND_WRITE,
             //init files 때문에 제외
             BenchmarkMode.FIO_SEQ_READ, BenchmarkMode.FIO_RND_READ,
+            //sustained read도 prep이 write를 수행하므로 read-only 볼륨에서 제외
+            BenchmarkMode.FIO_SUSTAINED_SEQ_READ, BenchmarkMode.FIO_SUSTAINED_RND_READ,
+            BenchmarkMode.FIO_SUSTAINED_SEQ_WRITE, BenchmarkMode.FIO_SUSTAINED_RND_WRITE,
         )
         if(readOnly&&isWrite) return false
         return true
@@ -175,6 +178,48 @@ private fun IdleContent(
             )
         }
     }
+
+    Spacer(modifier = Modifier.height(8.dp))
+    SectionHeader("fio sustained (steady-state)")
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CategoryCard(
+                label = "Sust Seq R",
+                subtitle = "Prep → steady read",
+                icon = Icons.Default.Timeline,
+                enabled = canRun(BenchmarkMode.FIO_SUSTAINED_SEQ_READ),
+                onClick = { onStart(BenchmarkMode.FIO_SUSTAINED_SEQ_READ) },
+                modifier = Modifier.weight(1f),
+            )
+            CategoryCard(
+                label = "Sust Rnd R",
+                subtitle = "Prep → steady read",
+                icon = Icons.Default.Shuffle,
+                enabled = canRun(BenchmarkMode.FIO_SUSTAINED_RND_READ),
+                onClick = { onStart(BenchmarkMode.FIO_SUSTAINED_RND_READ) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CategoryCard(
+                label = "Sust Seq W",
+                subtitle = "Timeline + phase 분석",
+                icon = Icons.Default.Timeline,
+                enabled = canRun(BenchmarkMode.FIO_SUSTAINED_SEQ_WRITE),
+                onClick = { onStart(BenchmarkMode.FIO_SUSTAINED_SEQ_WRITE) },
+                modifier = Modifier.weight(1f),
+            )
+            CategoryCard(
+                label = "Sust Rnd W",
+                subtitle = "Timeline + phase 분석",
+                icon = Icons.Default.Shuffle,
+                enabled = canRun(BenchmarkMode.FIO_SUSTAINED_RND_WRITE),
+                onClick = { onStart(BenchmarkMode.FIO_SUSTAINED_RND_WRITE) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
     when {
         configWarning != null -> {
             Text(
@@ -265,6 +310,7 @@ private fun RunningProgressCard(state: BenchmarkState.Running) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             val isFio = state.phase.startsWith("fio:")
+            val isSustained = state.phase.startsWith("Sustained")
             // Top: phase name + iter counter
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -284,7 +330,15 @@ private fun RunningProgressCard(state: BenchmarkState.Running) {
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
-                if (isFio && state.iteration > 0) {
+                if (isSustained && state.totalIterations > 0) {
+                    // time-based: 경과초 / 총 runtime초
+                    Text(
+                        "${state.iteration}s / ${state.totalIterations}s",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                } else if (isFio && state.iteration > 0) {
                     // count-based: elapsed seconds only
                     Text(
                         "${state.iteration}s elapsed",
@@ -302,8 +356,18 @@ private fun RunningProgressCard(state: BenchmarkState.Running) {
                 }
             }
 
-            // Linear progress — fio is count-based, no ETA → indeterminate
-            if (isFio) {
+            // Linear progress — sustained는 time-based라 정확한 % 표시 가능
+            if (isSustained && state.totalIterations > 0) {
+                LinearProgressIndicator(
+                    progress = {
+                        (state.iteration.toFloat() / state.totalIterations).coerceIn(0f, 1f)
+                    },
+                    modifier = Modifier.fillMaxWidth().height(8.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.12f),
+                )
+            } else if (isFio) {
+                // legacy fio: count-based, no ETA → indeterminate
                 LinearProgressIndicator(
                     modifier = Modifier.fillMaxWidth().height(8.dp),
                     color = MaterialTheme.colorScheme.primary,

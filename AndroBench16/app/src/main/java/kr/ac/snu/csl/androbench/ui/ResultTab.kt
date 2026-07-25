@@ -50,12 +50,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
 import kr.ac.snu.csl.androbench.bench.BenchmarkMode
 import kr.ac.snu.csl.androbench.bench.BenchmarkResult
 import kr.ac.snu.csl.androbench.bench.BenchmarkState
+import kr.ac.snu.csl.androbench.bench.BwSample
 import kr.ac.snu.csl.androbench.bench.HistogramBin
 import kr.ac.snu.csl.androbench.bench.LatencyStats
 import kr.ac.snu.csl.androbench.bench.PercentilePoint
+import kr.ac.snu.csl.androbench.bench.detectPhases
 
 
 @Composable
@@ -90,9 +93,12 @@ private fun ResultBody(result: BenchmarkResult) {
     val showSeq    = result.mode == BenchmarkMode.ALL || result.mode == BenchmarkMode.SEQUENTIAL
     val showRnd    = result.mode == BenchmarkMode.ALL || result.mode == BenchmarkMode.RANDOM
     val showSqlite = result.mode == BenchmarkMode.ALL || result.mode == BenchmarkMode.SQLITE
-    val showFio =result.mode in listOf(BenchmarkMode.FIO_RND_READ, BenchmarkMode.FIO_RND_WRITE,BenchmarkMode.FIO_SEQ_READ, BenchmarkMode.FIO_SEQ_WRITE)
+    val showFio =result.mode in listOf(BenchmarkMode.FIO_RND_READ, BenchmarkMode.FIO_RND_WRITE,BenchmarkMode.FIO_SEQ_READ, BenchmarkMode.FIO_SEQ_WRITE,
+        BenchmarkMode.FIO_SUSTAINED_SEQ_READ, BenchmarkMode.FIO_SUSTAINED_RND_READ,
+        BenchmarkMode.FIO_SUSTAINED_SEQ_WRITE, BenchmarkMode.FIO_SUSTAINED_RND_WRITE)
 
-    val isFioWrite=result.mode in listOf(BenchmarkMode.FIO_SEQ_WRITE, BenchmarkMode.FIO_RND_WRITE)
+    val isFioWrite=result.mode in listOf(BenchmarkMode.FIO_SEQ_WRITE, BenchmarkMode.FIO_RND_WRITE,
+        BenchmarkMode.FIO_SUSTAINED_SEQ_WRITE, BenchmarkMode.FIO_SUSTAINED_RND_WRITE)
 
     if (showSeq) {
         CategoryResultCard(
@@ -146,6 +152,10 @@ private fun ResultBody(result: BenchmarkResult) {
         //latency results
         result.fioLatency?.let{stats->
             LatencyCard("Latency · $modeName", stats)
+        }
+        //sustained BW 시계열 (sustained 모드에서만 채워짐)
+        if (result.bwSamples.isNotEmpty()) {
+            BwTimelineCard(result.bwSamples)
         }
     }
 
@@ -929,4 +939,118 @@ private fun SectionHeader(title: String) {
         style = MaterialTheme.typography.headlineSmall,
         fontWeight = FontWeight.Bold,
     )
+}
+
+/**
+ * Sustained BW 시계열 카드.
+ * - phase 자동 감지: 1개면 "안정" + CV 배지, 2개+면 "전이 감지" + phase별 표
+ * - 헤드라인 값 = 마지막 phase 평균 (전이가 있으면 전체 평균은 오염된 값이므로)
+ */
+@Composable
+private fun BwTimelineCard(samples: List<BwSample>) {
+    if (samples.size < 5) return
+    val phases = remember(samples) { detectPhases(samples) }
+    if (phases.isEmpty()) return
+    val last = phases.last()
+    val lastVals = samples.filter { it.timeMs >= last.startMs }.map { it.bwKBps }
+    val mean = lastVals.average()
+    val std = kotlin.math.sqrt(lastVals.map { (it - mean) * (it - mean) }.average())
+    val cv = if (mean > 0) std / mean * 100 else 0.0
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Timeline,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    "BW timeline",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Spacer(Modifier.weight(1f))
+                if (phases.size > 1) {
+                    Text(
+                        "전이 감지 · ${phases.size} phases",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                } else {
+                    Text(
+                        "안정 · CV %.1f%%".format(cv),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (cv <= 5.0) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+
+            //헤드라인: 마지막 phase 평균
+            Text(
+                "sustained %.1f MB/s".format(last.avgMBps),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Text(
+                "%d samples · %.0fs".format(
+                    samples.size,
+                    (samples.last().timeMs - samples.first().timeMs) / 1000.0,
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            //전이가 있으면 phase별 평균 표
+            if (phases.size > 1) {
+                Spacer(Modifier.height(4.dp))
+                phases.forEachIndexed { i, p ->
+                    Text(
+                        "phase ${i + 1}: %.0f MB/s  (%ds ~ %ds)".format(
+                            p.avgMBps, p.startMs / 1000, p.endMs / 1000,
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+            }
+
+            //시계열 차트 (+phase 경계선)
+            val bws = samples.map { it.bwKBps }
+            val maxBw = (bws.maxOrNull() ?: 1.0).coerceAtLeast(1.0)
+            val minT = samples.first().timeMs
+            val spanT = (samples.last().timeMs - minT).coerceAtLeast(1L)
+            val lineColor = MaterialTheme.colorScheme.primary
+            val boundaryColor = MaterialTheme.colorScheme.error
+
+            Canvas(
+                Modifier
+                    .fillMaxWidth()
+                    .height(140.dp)
+                    .padding(top = 10.dp),
+            ) {
+                val path = Path()
+                samples.forEachIndexed { i, s ->
+                    val x = (s.timeMs - minT).toFloat() / spanT * size.width
+                    val y = size.height - (s.bwKBps / maxBw).toFloat() * size.height
+                    if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                drawPath(path, lineColor, style = Stroke(width = 3f))
+
+                phases.drop(1).forEach { p ->
+                    val x = (p.startMs - minT).toFloat() / spanT * size.width
+                    drawLine(
+                        color = boundaryColor,
+                        start = Offset(x, 0f),
+                        end = Offset(x, size.height),
+                        strokeWidth = 2f,
+                    )
+                }
+            }
+        }
+    }
 }

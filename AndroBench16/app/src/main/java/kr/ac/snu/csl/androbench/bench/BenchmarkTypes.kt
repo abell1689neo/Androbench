@@ -10,6 +10,10 @@ enum class BenchmarkMode{
     FIO_SEQ_WRITE,
     FIO_RND_READ,
     FIO_RND_WRITE,
+    FIO_SUSTAINED_SEQ_WRITE,
+    FIO_SUSTAINED_RND_WRITE,
+    FIO_SUSTAINED_SEQ_READ,
+    FIO_SUSTAINED_RND_READ,
 }
 
 //defines the configuration for running the benchmark
@@ -23,6 +27,11 @@ data class BenchmarkConfig(
     val numIterations: Int=5,
     val sqliteOperations: Int=1024,
     val mode: BenchmarkMode = BenchmarkMode.ALL,
+
+    //added
+    val sustainedReadRuntimeSec: Int=60,
+    val sustainedWriteRuntimeSec: Int=120,
+    val sustainedSeqWriteJobs: Int=1,   //1=벤치마크(단일스트림), 8+=고압 특성관측(hill)
 )
 //latency state
 data class LatencyStats(
@@ -73,6 +82,9 @@ data class BenchmarkResult(
     val rndReadLatency: LatencyStats?=null,
     val rndWriteLatency: LatencyStats?=null,
     val fioLatency: LatencyStats?=null,
+
+    //sustained BW
+    val bwSamples: List<BwSample> =emptyList(),
     )
 
 //saves the progress of benchmark
@@ -101,4 +113,45 @@ sealed class BenchmarkState {
 
     data class Done(val result: BenchmarkResult): BenchmarkState()
     data class Error(val message: String): BenchmarkState()
+}
+
+//시계열 sample
+data class BwSample(
+    val timeMs: Long,
+    val bwKBps: Double,
+    )
+
+data class BwPhase(val startMs: Long, val endMs: Long, val avgMBps: Double)
+
+//function to detect phases in write
+fun detectPhases(
+    samples: List<BwSample>, windowSec: Int = 5, threshold: Double = 0.25,
+): List<BwPhase>{
+    if(samples.size<windowSec*2){
+        if (samples.isEmpty()) return emptyList()
+        return listOf(BwPhase(samples.first().timeMs, samples.last().timeMs,
+            samples.map { it.bwKBps }.average() / 1024))
+    }
+    val phases = mutableListOf<BwPhase>()
+    var segStart = 0
+    var i = windowSec
+    while (i < samples.size) {
+        val seg = samples.subList(segStart, i)
+        val segMean = seg.map { it.bwKBps }.average()
+        val recent = samples.subList(i - windowSec, i).map { it.bwKBps }.average()
+        if (kotlin.math.abs(recent - segMean) / segMean > threshold) {
+            val end = i - windowSec
+            if (end > segStart) {
+                val p = samples.subList(segStart, end)
+                phases += BwPhase(p.first().timeMs, p.last().timeMs,
+                    p.map { it.bwKBps }.average() / 1024)
+            }
+            segStart = end
+            i = segStart + windowSec
+        } else i++
+    }
+    val tail = samples.subList(segStart, samples.size)
+    phases += BwPhase(tail.first().timeMs, tail.last().timeMs,
+        tail.map { it.bwKBps }.average() / 1024)
+    return phases
 }

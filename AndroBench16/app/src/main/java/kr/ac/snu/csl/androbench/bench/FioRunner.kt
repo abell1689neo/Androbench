@@ -7,19 +7,39 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 
+enum class FioLogProfile{
+    LEGACY,
+    SUST_SEQ,
+    SUST_RND,
+}
 class FioRunner(private val context: Context){
     private val fioPath: String
         get()="${context.applicationInfo.nativeLibraryDir}/libfio.so"
 
-    suspend fun run(args: List<String>): FioResult=withContext(Dispatchers.IO){
+    suspend fun run(args: List<String>,
+                    profile: FioLogProfile= FioLogProfile.LEGACY, //sustained -> bw log
+                    bsKbForDerivedBw: Int=4,
+    ): FioResult=withContext(Dispatchers.IO){
         //latency prefix for every fio
         val logDir=context.cacheDir.absolutePath
-        val logPrefix="$logDir/fio_lat_${System.nanoTime()}"
-        val finalArgs=args+listOf(
-            "--write_lat_log=$logPrefix", //log 기록 인자
-            "--per_job_logs=0",//모든 job합쳐서 file 1개
-            "--log_avg_msec=0", //매 op마다 기록 (평균 x)
-        )
+        val stamp = System.nanoTime()
+        val latPrefix="$logDir/fio_lat_$stamp"
+        val bwPrefix="$logDir/fio_bw_$stamp"
+
+        val finalArgs=args.toMutableList().apply {
+            add("--per_job_logs=0")
+            when (profile){
+                FioLogProfile.LEGACY, FioLogProfile.SUST_RND->{
+                    add("--write_lat_log=$latPrefix")
+                    add("--log_avg_msec=0")
+                }
+
+                FioLogProfile.SUST_SEQ->{
+                    add("--write_bw_log=$bwPrefix")
+                    add("--log_avg_msec=1000")
+                }
+            }
+        }
          //lambda block
         val cmd= listOf(fioPath, "--output-format=json")+finalArgs
         Log.i(TAG, "exec: ${cmd.joinToString(" ")}")
@@ -35,18 +55,47 @@ class FioRunner(private val context: Context){
 
         }
         val base=parseJson(output)
-        //compute latency stat from lat log
-        val clatLog=File("${logPrefix}_clat.log") //read clat file
-        val latencyStats= if(clatLog.exists()){
-            val rawLatencies=parseLatLog(clatLog)
-            if(rawLatencies.isNotEmpty()) LatencyCompute.compute(rawLatencies) else null
-        }else{
-            Log.w(TAG, "clat log not found: ${clatLog.absolutePath}")
-            null
+        var latencyStats: LatencyStats? =null
+        var bwSamples:List<BwSample> = emptyList()
+        when (profile){
+            FioLogProfile.LEGACY->{ //legacy: latency만
+                findLog(latPrefix, "_clat")?.let{clat->
+                    val raw=parseLatLog(clat)
+                    if(raw.isNotEmpty()) latencyStats=LatencyCompute.compute(raw)}
+                cleanupLatLogs(latPrefix)
+            }
+            FioLogProfile.SUST_RND -> {
+                findLog(latPrefix, "_clat")?.let{clat->
+                    val raw=parseLatLog(clat)
+                    if(raw.isNotEmpty()) latencyStats= LatencyCompute.compute(raw)
+                    bwSamples=deriveBwFromLatLog(clat, bsKbForDerivedBw)
+                }
+                cleanupLatLogs(latPrefix)
+            }
+            FioLogProfile.SUST_SEQ -> {
+                findLog(bwPrefix, "_bw")?.let { bwSamples = parseBwLog(it) }
+                File("${bwPrefix}_bw.log").delete()
+                File("${bwPrefix}_bw.1.log").delete()
+            }
         }
-        cleanupLatLogs(logPrefix)
-        base.copy(latency=latencyStats)//latency field update
+        base.copy(latency = latencyStats, bwSamples = bwSamples)
+        //compute latency stat from lat log
+//        val clatLog=File("${logPrefix}_clat.log") //read clat file
+//        val latencyStats= if(clatLog.exists()){
+//            val rawLatencies=parseLatLog(clatLog)
+//            if(rawLatencies.isNotEmpty()) LatencyCompute.compute(rawLatencies) else null
+//        }else{
+//            Log.w(TAG, "clat log not found: ${clatLog.absolutePath}")
+//            null
+//        }
+//        cleanupLatLogs(logPrefix)
+//        base.copy(latency=latencyStats)//latency field update
      }
+    private fun findLog(prefix: String, kind: String):File?=
+        listOf("$prefix$kind.log", "$prefix$kind.1.log")
+            .map{File(it)}.firstOrNull{it.exists()}
+
+
     private fun parseLatLog(file: File): LongArray{
         val result=ArrayList<Long>(65536)
         file.bufferedReader().use { reader->
@@ -65,9 +114,42 @@ class FioRunner(private val context: Context){
         }
         return result.toLongArray()
     }
-    private fun cleanupLatLogs(prefix: String){
-        listOf("${prefix}_clat.log", "${prefix}_slat.log", "${prefix}_lat.log")
-            .forEach { File(it).delete() }
+
+    //1초 bucket 합산 (numjobs>1 대비 — nj=1이면 항등)
+    private fun parseBwLog(file: File): List<BwSample> {
+        val buckets = sortedMapOf<Long, Double>()
+        file.bufferedReader().useLines { lines ->
+            lines.forEach { line ->
+                val p = line.split(",")
+                if (p.size >= 2) {
+                    val t = (p[0].trim().toLongOrNull() ?: return@forEach) / 1000 * 1000
+                    val bw = p[1].trim().toDoubleOrNull() ?: return@forEach
+                    buckets[t] = (buckets[t] ?: 0.0) + bw
+                }
+            }
+        }
+        return buckets.map { BwSample(it.key, it.value) }
+    }
+    private fun deriveBwFromLatLog(file: File, bsKb: Int): List<BwSample> {
+        val counts = sortedMapOf<Long, Long>()
+        file.bufferedReader().useLines { lines ->
+            lines.forEach { line ->
+                val c = line.indexOf(',')
+                if (c < 0) return@forEach
+                val t = line.substring(0, c).trim().toLongOrNull() ?: return@forEach
+                val b = t / 1000 * 1000
+                counts[b] = (counts[b] ?: 0L) + 1L
+            }
+        }
+        //마지막 부분 버킷(1초 미만)은 BW가 낮게 왜곡되므로 제외
+        val list = counts.map { (t, n) -> BwSample(t, n.toDouble() * bsKb) }
+        return if (list.size > 2) list.dropLast(1) else list
+    }
+    private fun cleanupLatLogs(prefix: String) {
+        listOf("_clat", "_slat", "_lat").forEach { k ->
+            File("$prefix$k.log").delete()
+            File("$prefix$k.1.log").delete()
+        }
     }
     private fun parseJson(text: String): FioResult{
         val jsonStart=text.indexOf('{')
@@ -97,4 +179,5 @@ data class FioResult(
     val writeIops: Double,
     val elapsedSec: Int,
     val latency: LatencyStats?=null,
+    val bwSamples: List<BwSample> = emptyList(),
 )

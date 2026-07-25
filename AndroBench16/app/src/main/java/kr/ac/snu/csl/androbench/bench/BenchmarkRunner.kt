@@ -29,17 +29,26 @@ class BenchmarkRunner(private val context: Context) {
         onProgress: ProgressCallback = { _, _, _, _, _ -> },
     ): BenchmarkResult = withContext(Dispatchers.IO) {
 
-        //1. fio mode appended
+        //1. sustained
         if(config.mode in listOf(
+                BenchmarkMode.FIO_SUSTAINED_SEQ_READ,
+                BenchmarkMode.FIO_SUSTAINED_RND_READ,
+                BenchmarkMode.FIO_SUSTAINED_SEQ_WRITE,
+                BenchmarkMode.FIO_SUSTAINED_RND_WRITE,
+        )){
+            return@withContext runFioSustained(config, onProgress)
+        }
+        //2. legacy
+        if (config.mode in listOf(
                 BenchmarkMode.FIO_SEQ_READ,
                 BenchmarkMode.FIO_SEQ_WRITE,
                 BenchmarkMode.FIO_RND_READ,
                 BenchmarkMode.FIO_RND_WRITE,
-        )){
+            )) {
             return@withContext runFio(config, onProgress)
         }
 
-        //2. default mode
+        //2. default mode (native?)
         Log.i("BenchmarkRunner",
             "RUN mode=${config.mode} path=${config.targetPath} " +
             "fileSizeKb=${config.fileSizeKb} seqReclenKb=${config.seqReclenKb} " +
@@ -294,6 +303,121 @@ class BenchmarkRunner(private val context: Context) {
             )
         }finally{
             progressJob.cancel()
+        }
+    }
+    private suspend fun runFioSustained(
+        config: BenchmarkConfig,
+        onProgress: ProgressCallback,
+    ): BenchmarkResult=coroutineScope {
+        val isWrite=config.mode in listOf(
+            BenchmarkMode.FIO_SUSTAINED_SEQ_WRITE, BenchmarkMode.FIO_SUSTAINED_RND_WRITE,
+        )
+        val isRandom = config.mode in listOf(
+            BenchmarkMode.FIO_SUSTAINED_RND_READ, BenchmarkMode.FIO_SUSTAINED_RND_WRITE
+        )
+        //job 수: rnd=numThreads, seq write=전용 필드(1=벤치, 8+=고압), seq read=1
+        val numjobs = when {
+            isRandom -> config.numThreads
+            isWrite -> config.sustainedSeqWriteJobs
+            else -> 1
+        }
+        //1. 시작 상태 준비 — read: QD1 prep(배치 리셋) / write: 삭제+settle(fresh, WB 깨끗)
+        if (isWrite) {
+            onProgress("Fresh (delete + settle)", 1, 2, 0, 0)
+            FioPrep(context, config.targetPath).freshen(
+                prefixes = if (isRandom) listOf("sust_rnd_") else listOf("sust_seqw_"),
+                exact = if (isRandom) emptyList() else listOf("sust_seq.bin"),
+            ) { s, t ->
+                onProgress("Settle $s/${t}s", 1, 2, s, t)
+            }
+        } else {
+            //파일 명 준비 (다중 job은 반드시 파일 분리 — inode 락 직렬화 회피)
+            val prepFiles = if (isRandom) (0 until numjobs).map { "sust_rnd_$it" }
+                            else listOf("sust_seq.bin")
+            onProgress("Prep (QD1 write)", 1, 2, 0, prepFiles.size)
+            FioPrep(context, config.targetPath).ensure(prepFiles, config.fileSizeKb) { d, t ->
+                onProgress("Prep $d/$t", 1, 2, d, t)
+            }
+        }
+
+        //2. time based 측정
+        val blockSize=if(isRandom) config.rndReclenKb else config.seqReclenKb
+        val runtime = if (isWrite) config.sustainedWriteRuntimeSec
+                      else config.sustainedReadRuntimeSec
+        val rwArg = when {
+            isRandom && isWrite -> "randwrite"
+            isRandom -> "randread"
+            isWrite -> "write"
+            else -> "read"
+        }
+
+        val args=mutableListOf(
+            "--name=sustained",
+            "--rw=$rwArg",
+            "--bs=${blockSize}k",
+            "--size=${config.fileSizeKb}k",
+            "--direct=1",
+            "--ioengine=psync",
+            "--numjobs=$numjobs",
+            "--group_reporting",
+            "--thread",
+            "--randrepeat=0",
+            //write는 native(=셸 hill 캘리브레이션과 동일: fallocate 후 fresh extent에 쓰기)
+            "--fallocate=${if (isWrite) "native" else "none"}",
+            "--time_based",
+            "--runtime=$runtime",
+            //no unlink -> sustain prep file
+        )
+        //파일 지정
+        when {
+            isRandom -> {
+                args.add("--directory=${config.targetPath}")
+                args.add("--filename_format=sust_rnd_\$jobnum")
+                args.add("--nrfiles=1")
+            }
+            numjobs > 1 -> {
+                args.add("--directory=${config.targetPath}")
+                args.add("--filename_format=sust_seqw_\$jobnum")
+                args.add("--nrfiles=1")
+            }
+            else -> args.add("--filename=${config.targetPath}/sust_seq.bin")
+        }
+        if (isWrite) {
+            //batched sync: 파일 1바퀴당 fdatasync 1회 (고압에서도 유입 스로틀 거의 없음)
+            args.add("--fdatasync=${config.fileSizeKb / blockSize}")
+        }
+
+        val progressjob=launch{
+            var sec=0
+            while(true){
+                onProgress("Sustained: ${config.mode.name.removePrefix("FIO_SUSTAINED_")}",
+                    2, 2, sec, runtime)
+                delay(1000)
+                sec+=1
+            }
+        }
+
+        try{
+            val fioResult= FioRunner(context).run(
+                args,
+                profile=if(isRandom) FioLogProfile.SUST_RND else FioLogProfile.SUST_SEQ,
+                bsKbForDerivedBw = config.rndReclenKb,
+            )
+            BenchmarkResult(
+                seqReadMBps = 0.0, seqWriteMBps = 0.0,
+                rndReadMBps = 0.0, rndReadIops = 0.0,
+                rndWriteMBps = 0.0, rndWriteIops = 0.0,
+                sqliteInsertTps = 0.0, sqliteUpdateTps = 0.0, sqliteDeleteTps = 0.0,
+                mode = config.mode,
+                fioReadMBps = if (isWrite) 0.0 else fioResult.readMBps,
+                fioReadIops = if (isWrite) 0.0 else fioResult.readIops,
+                fioWriteMBps = if (isWrite) fioResult.writeMBps else 0.0,
+                fioWriteIops = if (isWrite) fioResult.writeIops else 0.0,
+                fioLatency = fioResult.latency,
+                bwSamples = fioResult.bwSamples,
+            )
+        }finally {
+            progressjob.cancel()
         }
     }
 }

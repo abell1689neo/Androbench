@@ -6,12 +6,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import kotlin.math.log
 
 class FioRunner(private val context: Context){
     private val fioPath: String
         get()="${context.applicationInfo.nativeLibraryDir}/libfio.so"
 
-    suspend fun run(args: List<String>): FioResult=withContext(Dispatchers.IO){
+    suspend fun run(args: List<String>,
+                    collectMmapCounters: Boolean=false,
+                    ): FioResult=withContext(Dispatchers.IO){
         //latency prefix for every fio
         val logDir=context.cacheDir.absolutePath
         val logPrefix="$logDir/fio_lat_${System.nanoTime()}"
@@ -24,7 +27,14 @@ class FioRunner(private val context: Context){
         val cmd= listOf(fioPath, "--output-format=json")+finalArgs
         Log.i(TAG, "exec: ${cmd.joinToString(" ")}")
 
-        val process= ProcessBuilder(cmd).redirectErrorStream(true).start() //start fio process
+        //remove prev snpashot
+        File(logDir, "mmap.prerun.txt").delete()
+        File(logDir, "mmap.postrun.txt").delete()//?
+
+        //log prerun.txt
+        val process= ProcessBuilder(cmd)
+            .directory(context.cacheDir) //log exec_prerun/postrun stdout to the path
+            .redirectErrorStream(true).start() //start fio process
         val output=process.inputStream.bufferedReader().readText()
         val exitCode=process.waitFor() //wait for child to terminate
 
@@ -34,8 +44,10 @@ class FioRunner(private val context: Context){
             throw RuntimeException("fio failed: exit=$exitCode")
 
         }
-        val base=parseJson(output)
-        //compute latency stat from lat log
+        //process results
+        var base=parseJson(output)
+
+        //1. compute latency stat from lat log
         val clatLog=File("${logPrefix}_clat.log") //read clat file
         val latencyStats= if(clatLog.exists()){
             val rawLatencies=parseLatLog(clatLog)
@@ -45,6 +57,21 @@ class FioRunner(private val context: Context){
             null
         }
         cleanupLatLogs(logPrefix)
+
+        //2. mmap kernel counter
+        if(collectMmapCounters){
+            //parse read bytes in the log
+            val pre=parseProcIo(File(logDir, "mmap.prerun.txt"))
+            val post=parseProcIo(File(logDir, "mmap.postrun.txt"))
+
+            if(pre!=null && post!= null){
+                base=base.copy(
+                    kernelReadBytes=(post["read_bytes"]?:0) - (pre["read_bytes"]?:0),
+                    kernelWriteBytes = (post["write_bytes"]?:0)-(pre["write_bytes"]?:0),
+
+                )
+            } else Log.w(TAG, "mmap prerun/postrun snapshot missing")
+        }
         base.copy(latency=latencyStats)//latency field update
      }
     private fun parseLatLog(file: File): LongArray{
@@ -83,9 +110,23 @@ class FioRunner(private val context: Context){
             writeMBps = write.getDouble("bw")/1024.0,
             writeIops = write.getDouble("iops"),
             elapsedSec = job.getInt("elapsed"),
+            //mmap fields in json
+            logicalIoBytes = read.getLong("io_bytes")+write.getLong("io_bytes"), // read일때 write 0
+            majFaults = job.optInt("majf", 0),
+            minFaults = job.optInt("minf", 0)
+
         )
     }
-
+    private fun parseProcIo(file:File): Map<String, Long>?{
+        if (!file.exists()) return null
+        return file.readLines()
+            .mapNotNull { line->
+                val idx=line.indexOf(':')
+                if(idx<0) null
+                else line.substring(0, idx).trim() to
+                        (line.substring(idx+1).trim().toLongOrNull()?: return@mapNotNull null)
+            }.toMap()
+    }
     companion object{
         private const val TAG="FioRunner"
     }
@@ -97,4 +138,10 @@ data class FioResult(
     val writeIops: Double,
     val elapsedSec: Int,
     val latency: LatencyStats?=null,
+    //mmap stats
+    val logicalIoBytes: Long=0,
+    val majFaults: Int=0,
+    val minFaults: Int=0,
+    val kernelReadBytes: Long=-1,
+    val kernelWriteBytes: Long=-1,
 )

@@ -47,4 +47,12 @@ data class HistoryRecord(
     val fioReadIops: Double = 0.0,
     val fioWriteMBps: Double = 0.0,
     val fioWriteIops: Double = 0.0,
+
+    //results (mmap 커널 회계) — 4k/16k 커널 비교 대장부용
+    val mmapReadaheadOn: Boolean = false,
+    val mmapLogicalBytes: Long = 0,
+    val mmapKernelReadBytes: Long = -1,   //-1 = 미수집 (비 mmap 모드)
+    val mmapKernelWriteBytes: Long = -1,
+    val mmapMajFaults: Int = 0,
+    val mmapMinFaults: Int = 0,
 )

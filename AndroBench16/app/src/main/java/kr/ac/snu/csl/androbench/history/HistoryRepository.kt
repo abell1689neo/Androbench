@@ -47,6 +47,13 @@ class HistoryRepository(context: Context) {//constructor
             fioReadIops = result.fioReadIops,
             fioWriteIops = result.fioWriteIops,
             fioWriteMBps = result.fioWriteMBps,
+            //mmap 커널 회계 (비 mmap 모드는 기본값 유지)
+            mmapReadaheadOn = result.mmapStats?.readaheadOn ?: false,
+            mmapLogicalBytes = result.mmapStats?.logicalBytes ?: 0,
+            mmapKernelReadBytes = result.mmapStats?.kernelReadBytes ?: -1,
+            mmapKernelWriteBytes = result.mmapStats?.kernelWriteBytes ?: -1,
+            mmapMajFaults = result.mmapStats?.majFaults ?: 0,
+            mmapMinFaults = result.mmapStats?.minFaults ?: 0,
         )
         return dao.insert(record)
     }

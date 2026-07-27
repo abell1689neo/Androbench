@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SelectAll
 import androidx.compose.material.icons.filled.Shuffle
@@ -81,6 +82,9 @@ private fun IdleContent(
             BenchmarkMode.FIO_SEQ_WRITE, BenchmarkMode.FIO_RND_WRITE,
             //init files 때문에 제외
             BenchmarkMode.FIO_SEQ_READ, BenchmarkMode.FIO_RND_READ,
+            //mmap도 prep이 write 수행
+            BenchmarkMode.FIO_MMAP_SEQ_READ, BenchmarkMode.FIO_MMAP_RND_READ,
+            BenchmarkMode.FIO_MMAP_SEQ_WRITE, BenchmarkMode.FIO_MMAP_RND_WRITE,
         )
         if(readOnly&&isWrite) return false
         return true
@@ -175,6 +179,51 @@ private fun IdleContent(
             )
         }
     }
+    Spacer(modifier = Modifier.height(8.dp))
+    SectionHeader("mmap (page cache · RA/WAF)")
+    Text(
+        if (config.mmapReadaheadOn) "readahead ON — 실전 모드" else "readahead OFF — 순수 페이지 단위",
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CategoryCard(
+                label = "mmap Seq R",
+                subtitle = "fault·RA 측정",
+                icon = Icons.Default.Memory,
+                enabled = canRun(BenchmarkMode.FIO_MMAP_SEQ_READ),
+                onClick = { onStart(BenchmarkMode.FIO_MMAP_SEQ_READ) },
+                modifier = Modifier.weight(1f),
+            )
+            CategoryCard(
+                label = "mmap Rnd R",
+                subtitle = "fault·RA 측정",
+                icon = Icons.Default.Memory,
+                enabled = canRun(BenchmarkMode.FIO_MMAP_RND_READ),
+                onClick = { onStart(BenchmarkMode.FIO_MMAP_RND_READ) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            CategoryCard(
+                label = "mmap Seq W",
+                subtitle = "RMW·WAF 측정",
+                icon = Icons.Default.Memory,
+                enabled = canRun(BenchmarkMode.FIO_MMAP_SEQ_WRITE),
+                onClick = { onStart(BenchmarkMode.FIO_MMAP_SEQ_WRITE) },
+                modifier = Modifier.weight(1f),
+            )
+            CategoryCard(
+                label = "mmap Rnd W",
+                subtitle = "RMW·WAF 측정",
+                icon = Icons.Default.Memory,
+                enabled = canRun(BenchmarkMode.FIO_MMAP_RND_WRITE),
+                onClick = { onStart(BenchmarkMode.FIO_MMAP_RND_WRITE) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
     when {
         configWarning != null -> {
             Text(
@@ -264,7 +313,7 @@ private fun RunningProgressCard(state: BenchmarkState.Running) {
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            val isFio = state.phase.startsWith("fio:")
+            val isFio = state.phase.startsWith("fio:") || state.phase.startsWith("mmap:")
             // Top: phase name + iter counter
             Row(
                 modifier = Modifier.fillMaxWidth(),

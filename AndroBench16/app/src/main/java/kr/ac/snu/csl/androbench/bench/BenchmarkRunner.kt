@@ -29,17 +29,27 @@ class BenchmarkRunner(private val context: Context) {
         onProgress: ProgressCallback = { _, _, _, _, _ -> },
     ): BenchmarkResult = withContext(Dispatchers.IO) {
 
-        //1. fio mode appended
+        //1. fio mode (o_direct)
         if(config.mode in listOf(
                 BenchmarkMode.FIO_SEQ_READ,
                 BenchmarkMode.FIO_SEQ_WRITE,
                 BenchmarkMode.FIO_RND_READ,
                 BenchmarkMode.FIO_RND_WRITE,
         )){
-            return@withContext runFio(config, onProgress)
+            return@withContext runFioDirect(config, onProgress)
+        }
+        //2. fio mode (mmap)
+
+        if(config.mode in listOf(
+                BenchmarkMode.FIO_MMAP_RND_READ,
+                BenchmarkMode.FIO_MMAP_SEQ_READ,
+                BenchmarkMode.FIO_MMAP_RND_WRITE,
+                BenchmarkMode.FIO_MMAP_SEQ_WRITE,
+        )){
+            return@withContext runFioMmap(config, onProgress)
         }
 
-        //2. default mode
+        //3. default mode
         Log.i("BenchmarkRunner",
             "RUN mode=${config.mode} path=${config.targetPath} " +
             "fileSizeKb=${config.fileSizeKb} seqReclenKb=${config.seqReclenKb} " +
@@ -199,7 +209,7 @@ class BenchmarkRunner(private val context: Context) {
         }else null
         return Triple(mbpsAvg, iopsAvg, latency)
     }
-    private suspend fun runFio(
+    private suspend fun runFioDirect(
         config: BenchmarkConfig,
         onProgress: ProgressCallback,
     ): BenchmarkResult= coroutineScope{
@@ -218,7 +228,7 @@ class BenchmarkRunner(private val context: Context) {
         val numjobs=if(isRandom) config.numThreads else 1 //seq일때는 thread 1개로 진행
 
 
-        //얘네 인자 검증 필요
+        //인자 검증 필요
         val args=mutableListOf(
             "--name=androbench",
             "--rw=$rwArg",
@@ -226,7 +236,6 @@ class BenchmarkRunner(private val context: Context) {
             "--size=${config.fileSizeKb}k",
             //"--filename=$testFile",
             "--direct=1",//o_direct
-            "--fdatasync=1",
             "--ioengine=psync",//why psync?
             "--thread",
             "--numjobs=$numjobs",
@@ -240,6 +249,14 @@ class BenchmarkRunner(private val context: Context) {
             //"--time_based",
             //"--ramp_time=2",//eliminate warmup effect
         )
+        //batched sync: loop(파일 1바퀴)당 fdatasync 1회 — op당 sync는 캐시 왜곡 대비 과한 스로틀
+        val opsPerLoop=if(isRandom){
+            config.rndMaxRecs
+        }else{
+            config.fileSizeKb/config.seqReclenKb
+        }
+        args.add("--fdatasync=$opsPerLoop")
+
         if(isRandom){
             //per thread file
             args.add("--directory=${config.targetPath}")
@@ -284,6 +301,107 @@ class BenchmarkRunner(private val context: Context) {
                 fioWriteIops = fioResult.writeIops,
                 fioLatency = fioResult.latency,
             )
+        }finally{
+            progressJob.cancel()
+        }
+    }
+
+    //mmap engine
+    private suspend fun runFioMmap(
+        config: BenchmarkConfig,
+        onProgress: ProgressCallback
+    ): BenchmarkResult=coroutineScope {
+        val isRandom=config.mode in listOf(
+            BenchmarkMode.FIO_MMAP_RND_READ, BenchmarkMode.FIO_MMAP_RND_WRITE)
+        val isWrite=config.mode in listOf(BenchmarkMode.FIO_MMAP_RND_WRITE, BenchmarkMode.FIO_MMAP_SEQ_WRITE)
+        val blockSize=if(isRandom) config.rndReclenKb else config.seqReclenKb
+        val testFile= "${config.targetPath}/mmap_test.bin"
+
+        //1. 대상 파일 준비 (QD1 seq write), direct이므로 page cache 회피 가능
+        onProgress("Prep (QD1 write) ", 1, 2, 0, 0)
+        val f=java.io.File(testFile)
+        if(!f.exists()||f.length()!=config.fileSizeKb.toLong()*1024L){
+            f.delete()
+            FioRunner(context).run(listOf(
+                "--name=prep",
+                "--rw=write",
+                "--bs=1m",
+                "--size=${config.fileSizeKb}k",
+                "--filename=$testFile",
+                "--direct=1",
+                "--ioengine=psync",
+                "--thread",
+                "--fallocate=none",
+            ))
+        }
+
+        //2. mmap experiment
+        val args=mutableListOf(
+            "--name=mmap",
+            "--ioengine=mmap",
+            "--rw=${when {
+                isRandom&&isWrite -> "randwrite"
+                isRandom->"randread"
+                isWrite->"write"
+                else-> "read"
+            }}",
+            "--bs=${blockSize}k",
+            "--size=${config.fileSizeKb}k",
+            "--filename=$testFile",
+            "--thread",
+            "--numjobs=1",
+            "--invalidate=1", //시작 전 file의 cache 무효화?
+            "--randrepeat=0",
+            //readahead if 0
+            "--fadvise_hint=${if (config.mmapReadaheadOn) "0" else "random"}",
+            //kernel snapshot (read bytes)
+            "--exec_prerun=cat /proc/\$PPID/io",
+            "--exec_postrun=cat /proc/\$PPID/io",
+        )
+        if(isRandom){
+            args.add("--number_ios=${config.rndMaxRecs}")
+        }
+        if(isWrite){
+            //?? needs flushing to ensure storage write happens
+            //job 끝날때마다 sync 한번씩
+            args.add("--end_fsync=1")
+        }
+
+        //show progress
+        val progressJob=launch{
+            var sec=0
+            while(true){
+                onProgress("mmap: ${config.mode.name.removePrefix("FIO_MMAP_")}",2,2,sec,0)
+                delay(1000)
+                sec+=1
+            }
+        }
+
+        try{
+            val r= FioRunner(context).run(args, collectMmapCounters = true)
+            BenchmarkResult(
+                seqReadMBps = 0.0, seqWriteMBps = 0.0,
+                rndReadMBps = 0.0, rndReadIops = 0.0,
+                rndWriteMBps = 0.0, rndWriteIops = 0.0,
+                sqliteInsertTps = 0.0, sqliteUpdateTps = 0.0, sqliteDeleteTps = 0.0,
+                mode=config.mode,
+                fioReadMBps = if (isWrite) 0.0 else r.readMBps,
+                fioReadIops = if (isWrite) 0.0 else r.readIops,
+                fioWriteMBps = if (isWrite) r.writeMBps else 0.0,
+                fioWriteIops = if (isWrite) r.writeIops else 0.0,
+                fioLatency = r.latency,
+                mmapStats = if(r.kernelReadBytes>=0) MmapStats(
+                    logicalBytes = r.logicalIoBytes,
+                    kernelReadBytes = r.kernelReadBytes,
+                    kernelWriteBytes = r.kernelWriteBytes,
+                    majFaults = r.majFaults,
+                    minFaults = r.minFaults,
+                    pageSizeBytes = android.system.Os.sysconf(
+                        android.system.OsConstants._SC_PAGESIZE).toInt(),
+                    readaheadOn = config.mmapReadaheadOn,
+                    )else null
+            )
+
         }finally{
             progressJob.cancel()
         }

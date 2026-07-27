@@ -41,30 +41,10 @@ fun SettingsCard(
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SummaryCard(config)
 
-        // ── Common — affects both NativeIO and fio ──
-        GroupLabel("Common — used by both NativeIO and fio")
+        // ── Common — 모든 엔진이 공유하는 워크로드 정의 ──
+        GroupLabel("Common — 모든 엔진 공통 (NativeIO · fio · mmap)")
 
-        SettingSection(title = "Sequential", icon = Icons.Default.Timeline) {
-            ChipSetting(
-                label = "Buffer size (block size)",
-                options = listOf(4, 8, 16, 32, 64, 128, 256),
-                current = config.seqReclenKb,
-                onChange = { onConfigChange(config.copy(seqReclenKb = it)) },
-                unitLabel = " KB",
-            )
-        }
-
-        SettingSection(title = "Random", icon = Icons.Default.Shuffle) {
-            ChipSetting(
-                label = "Buffer size (block size)",
-                options = listOf(4, 8, 16, 32, 64),
-                current = config.rndReclenKb,
-                onChange = { onConfigChange(config.copy(rndReclenKb = it)) },
-                unitLabel = " KB",
-            )
-        }
-
-        SettingSection(title = "Workload", icon = Icons.Default.Memory) {
+        SettingSection(title = "File & Block", icon = Icons.Default.Memory) {
             ChipSetting(
                 label = "File size per thread",
                 options = listOf(
@@ -84,28 +64,62 @@ fun SettingsCard(
                 onChange = { onConfigChange(config.copy(fileSizeKb = it)) },
             )
             ChipSetting(
-                label = "Threads (Random parallel jobs — Sequential fixed at 1)",
-                options = listOf(1, 2, 4, 8, 16, 32),
-                current = config.numThreads,
-                onChange = { onConfigChange(config.copy(numThreads = it)) },
+                label = "Sequential block size",
+                options = listOf(4, 8, 16, 32, 64, 128, 256),
+                current = config.seqReclenKb,
+                onChange = { onConfigChange(config.copy(seqReclenKb = it)) },
+                unitLabel = " KB",
             )
-        }
-
-        // ── Workload size & repetition (NativeIO + fio 공통) ──
-        GroupLabel("Random workload (NativeIO + fio)")
-
-        SettingSection(title = "Random workload", icon = Icons.Default.Build) {
             ChipSetting(
-                label = "Random ops per thread (working set = ops × threads × rnd block)",
+                label = "Random block size",
+                options = listOf(4, 8, 16, 32, 64),
+                current = config.rndReclenKb,
+                onChange = { onConfigChange(config.copy(rndReclenKb = it)) },
+                unitLabel = " KB",
+            )
+            ChipSetting(
+                label = "Random ops (direct: per thread · mmap: 총 1-pass 개수)",
                 options = listOf(2048, 8192, 16384, 32768, 65536),
                 current = config.rndMaxRecs,
                 onChange = { onConfigChange(config.copy(rndMaxRecs = it)) },
             )
+        }
+
+        // ── Direct 엔진 전용 (페이지 캐시 우회 — 병렬/반복이 의미 있는 축) ──
+        GroupLabel("NativeIO · fio 전용 (O_DIRECT)")
+
+        SettingSection(title = "Direct I/O", icon = Icons.Default.Build) {
             ChipSetting(
-                label = "Iterations (averaged across runs)",
+                label = "Threads (Random 병렬 job — Sequential 1 고정, mmap 미적용)",
+                options = listOf(1, 2, 4, 8, 16, 32),
+                current = config.numThreads,
+                onChange = { onConfigChange(config.copy(numThreads = it)) },
+            )
+            ChipSetting(
+                label = "Iterations (평균 낼 반복 횟수 — mmap 미적용)",
                 options = listOf(1, 3, 5, 10),
                 current = config.numIterations,
                 onChange = { onConfigChange(config.copy(numIterations = it)) },
+            )
+        }
+
+        // ── mmap 엔진 전용 (페이지 캐시 경유 — fault 회계) ──
+        GroupLabel("mmap 전용 (page cache · RA/WAF)")
+
+        SettingSection(title = "mmap", icon = Icons.Default.Memory) {
+            ChipSetting(
+                label = "Readahead (OFF = fault당 1페이지 → 페이지 크기 기준선 · ON = 커널 기본 선읽기)",
+                options = listOf(0, 1),
+                display = { if (it == 1) "ON (realistic)" else "OFF (pure page)" },
+                current = if (config.mmapReadaheadOn) 1 else 0,
+                onChange = { onConfigChange(config.copy(mmapReadaheadOn = it == 1)) },
+            )
+            Text(
+                "numjobs=1 · 1-pass 고정 — 다중 스레드/반복이 끼면 major fault ↔ ops 대응이 깨져 " +
+                        "RA/bytes-per-fault 회계가 비결정적이 됨. 통제 가능한 축은 block size · " +
+                        "ops 수 · readahead뿐.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 

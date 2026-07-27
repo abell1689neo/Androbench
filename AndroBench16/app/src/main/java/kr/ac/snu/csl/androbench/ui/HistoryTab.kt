@@ -227,6 +227,8 @@ private fun FioDetail(record: HistoryRecord) {
     val isRandom = "RND" in record.mode
     val isWrite = "WRITE" in record.mode
 
+    val isMmap = "MMAP" in record.mode
+
     DetailSection("Configuration (fio)") {
         DetailRow("Threads (numjobs)", if (isRandom) "${record.numThreads}" else "1")
         DetailRow("File size", "${record.fileSizeKb / 1024} MB")
@@ -236,6 +238,9 @@ private fun FioDetail(record: HistoryRecord) {
         )
         DetailRow("Pattern", if (isRandom) "Random" else "Sequential")
         DetailRow("Operation", if (isWrite) "Write" else "Read")
+        if (isMmap) {
+            DetailRow("Readahead", if (record.mmapReadaheadOn) "ON" else "OFF (pure page)")
+        }
     }
 
     HorizontalDivider()
@@ -247,6 +252,26 @@ private fun FioDetail(record: HistoryRecord) {
         } else {
             DetailRow("Read MB/s", "%.2f".format(record.fioReadMBps))
             DetailRow("Read IOPS", "%.0f".format(record.fioReadIops))
+        }
+    }
+
+    //mmap 커널 회계 (수집된 런에만 표시)
+    if (isMmap && record.mmapKernelReadBytes >= 0 && record.mmapLogicalBytes > 0) {
+        HorizontalDivider()
+        DetailSection("Kernel I/O accounting") {
+            val ra = record.mmapKernelReadBytes.toDouble() / record.mmapLogicalBytes
+            if (isWrite) {
+                val waf = record.mmapKernelWriteBytes.toDouble() / record.mmapLogicalBytes
+                DetailRow("WAF", "%.3f".format(waf))
+                DetailRow("RMW read", "%.3f".format(ra))
+            } else {
+                DetailRow("RA", "%.3f".format(ra))
+            }
+            if (record.mmapMajFaults > 0) {
+                DetailRow("bytes/fault",
+                    "%.1f KB".format(record.mmapKernelReadBytes.toDouble() / record.mmapMajFaults / 1024))
+            }
+            DetailRow("Major / Minor faults", "${record.mmapMajFaults} / ${record.mmapMinFaults}")
         }
     }
 }

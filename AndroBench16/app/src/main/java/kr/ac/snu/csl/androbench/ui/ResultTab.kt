@@ -87,65 +87,83 @@ fun ResultTab(state: BenchmarkState) {
 
 @Composable
 private fun ResultBody(result: BenchmarkResult) {
-    val showSeq    = result.mode == BenchmarkMode.ALL || result.mode == BenchmarkMode.SEQUENTIAL
-    val showRnd    = result.mode == BenchmarkMode.ALL || result.mode == BenchmarkMode.RANDOM
-    val showSqlite = result.mode == BenchmarkMode.ALL || result.mode == BenchmarkMode.SQLITE
-    val showFio =result.mode in listOf(BenchmarkMode.FIO_RND_READ, BenchmarkMode.FIO_RND_WRITE,BenchmarkMode.FIO_SEQ_READ, BenchmarkMode.FIO_SEQ_WRITE)
+    val mode = result.mode
+    val isMmap = mode.name.startsWith("FIO_MMAP")
+    val isFio = isMmap || mode in listOf(
+        BenchmarkMode.FIO_RND_READ, BenchmarkMode.FIO_RND_WRITE,
+        BenchmarkMode.FIO_SEQ_READ, BenchmarkMode.FIO_SEQ_WRITE,
+    )
+    val isFioWrite = mode in listOf(
+        BenchmarkMode.FIO_SEQ_WRITE, BenchmarkMode.FIO_RND_WRITE,
+        BenchmarkMode.FIO_MMAP_SEQ_WRITE, BenchmarkMode.FIO_MMAP_RND_WRITE,
+    )
 
-    val isFioWrite=result.mode in listOf(BenchmarkMode.FIO_SEQ_WRITE, BenchmarkMode.FIO_RND_WRITE)
+    if (isFio) {
+        //── 대제목: 워크로드 명 + 엔진/경로 라벨 ──
+        val workload = mode.name.removePrefix("FIO_MMAP_").removePrefix("FIO_")
+            .replace("_", " ")
+        BenchTitle(
+            title = workload,
+            engine = if (isMmap) "mmap engine · page cache 경로" else "fio · O_DIRECT 경로",
+        )
 
-    if (showSeq) {
-        CategoryResultCard(
-            title = "Sequential",
-            icon = Icons.Default.Timeline,
-            rows = listOf(
+        SubLabel("Throughput")
+        MetricRowsCard(
+            rows = if (isFioWrite)
+                listOf("Write" to formatMetric(result.fioWriteMBps, result.fioWriteIops))
+            else
+                listOf("Read" to formatMetric(result.fioReadMBps, result.fioReadIops)),
+        )
+
+        result.fioLatency?.let { stats ->
+            SubLabel("Latency")
+            LatencyCard("", stats)
+        }
+
+        result.mmapStats?.let { ms ->
+            SubLabel("Kernel I/O accounting")
+            MmapAccountingCard(ms, isWrite = isFioWrite)
+        }
+    } else {
+        val showSeq    = mode == BenchmarkMode.ALL || mode == BenchmarkMode.SEQUENTIAL
+        val showRnd    = mode == BenchmarkMode.ALL || mode == BenchmarkMode.RANDOM
+        val showSqlite = mode == BenchmarkMode.ALL || mode == BenchmarkMode.SQLITE
+
+        BenchTitle(
+            title = mode.name,
+            engine = if (mode == BenchmarkMode.SQLITE) "SQLite · buffered+fsync 경로"
+                     else "NativeIO · O_DIRECT 경로",
+        )
+
+        if (showSeq) {
+            SubLabel("Sequential")
+            MetricRowsCard(rows = listOf(
                 "Read"  to formatMetric(result.seqReadMBps, result.seqReadIops),
                 "Write" to formatMetric(result.seqWriteMBps, result.seqWriteIops),
-            ),
-        )
-    }
-    if (showRnd) {
-        CategoryResultCard(
-            title = "Random",
-            icon = Icons.Default.Shuffle,
-            rows = listOf(
+            ))
+        }
+        if (showRnd) {
+            SubLabel("Random")
+            MetricRowsCard(rows = listOf(
                 "Read"  to formatMetric(result.rndReadMBps, result.rndReadIops),
                 "Write" to formatMetric(result.rndWriteMBps, result.rndWriteIops),
-            ),
-        )
-        result.rndReadLatency?.let { stats ->
-            LatencyCard("Latency · Random Read", stats)
+            ))
+            result.rndReadLatency?.let {
+                SubLabel("Latency · Random Read")
+                LatencyCard("", it)
+            }
+            result.rndWriteLatency?.let {
+                SubLabel("Latency · Random Write")
+                LatencyCard("", it)
+            }
         }
-        result.rndWriteLatency?.let { stats ->
-            LatencyCard("Latency · Random Write", stats)
-        }
-    }
-    if (showSqlite) {
-        CategoryResultCard(
-            title = "SQLite",
-            icon = Icons.Default.Storage,
-            rows = listOf(
+        if (showSqlite) {
+            SubLabel("SQLite")
+            MetricRowsCard(rows = listOf(
                 "Insert" to "%.1f TPS".format(result.sqliteInsertTps),
                 "Update" to "%.1f TPS".format(result.sqliteUpdateTps),
                 "Delete" to "%.1f TPS".format(result.sqliteDeleteTps),
-            ),
-        )
-    }
-
-    if (showFio) {
-        val modeName = result.mode.name.removePrefix("FIO_").replace("_", " ")
-        CategoryResultCard(
-            title = "fio · $modeName",
-            icon = Icons.Default.Speed,
-            rows = if (isFioWrite) {
-                listOf("Write" to formatMetric(result.fioWriteMBps, result.fioWriteIops))
-            } else {
-                listOf("Read" to formatMetric(result.fioReadMBps, result.fioReadIops))
-            },
-        )
-        //latency results
-        result.fioLatency?.let{stats->
-            LatencyCard("Latency · $modeName", stats)
+            ))
         }
     }
 
@@ -154,6 +172,61 @@ private fun ResultBody(result: BenchmarkResult) {
         style = MaterialTheme.typography.labelSmall,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
+}
+
+//대제목: 워크로드를 크게, 아래에 엔진/경로 설명
+@Composable
+private fun BenchTitle(title: String, engine: String) {
+    Column {
+        Text(
+            title,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            engine,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+//소제목 (Throughput / Latency / Kernel I/O accounting …)
+@Composable
+private fun SubLabel(text: String) {
+    Text(
+        text,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.SemiBold,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+}
+
+//소제목 밑에 붙는 제목 없는 지표 카드
+@Composable
+private fun MetricRowsCard(rows: List<Pair<String, String>>) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            rows.forEach { (label, value) ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(label, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        value,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+        }
+    }
 }
 fun formatLatency(ns: Long): String=when{
     ns<1_000 -> "$ns ns"
@@ -238,12 +311,16 @@ private fun LatencyCard(title: String, stats: LatencyStats) {
                     modifier = Modifier.size(20.dp),
                 )
                 Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f),
-                )
+                if (title.isNotEmpty()) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                } else {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
                 Text(
                     "${formatCount(stats.count)} ops",
                     style = MaterialTheme.typography.labelSmall,
@@ -847,6 +924,101 @@ private fun computeBarFraction(count: Int, maxCount: Int): Float {
     val logMax = kotlin.math.log10(maxCount.toDouble() + 1.0)
     return (logC / logMax).toFloat()
 }
+//byte 수 표기: 4096 B / 12.3 KB / 134.2 MB / 1.25 GB
+internal fun formatBytes(b: Long): String = when {
+    b >= 1L shl 30 -> "%.2f GB".format(b / 1073741824.0)
+    b >= 1L shl 20 -> "%.1f MB".format(b / 1048576.0)
+    b >= 1L shl 10 -> "%.1f KB".format(b / 1024.0)
+    else -> "$b B"
+}
+
+//mmap 커널 회계 카드: RA/WAF 헤드라인 + 논리 vs 커널 실측 byte + fault 통계
+@Composable
+private fun MmapAccountingCard(
+    ms: kr.ac.snu.csl.androbench.bench.MmapStats,
+    isWrite: Boolean,
+) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            //헤더: 제목 + 커널 페이지 크기 (4k/16k 부팅 구분이 여기서 보임)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.Assessment,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    "page ${ms.pageSizeBytes / 1024}KB · readahead ${if (ms.readaheadOn) "ON" else "OFF"}",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+
+            //헤드라인: read 모드 = RA / write 모드 = WAF + RMW(쓰기가 유발한 읽기)
+            if (isWrite) {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    HeadlineMetric("WAF", "%.3f".format(ms.waf))
+                    HeadlineMetric("RMW read", "%.3f".format(ms.ra))
+                }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    HeadlineMetric("RA", "%.3f".format(ms.ra))
+                    HeadlineMetric("bytes/fault", formatBytes(ms.bytesPerFault.toLong()))
+                }
+            }
+
+            //상세 표
+            val rows = buildList {
+                add("Logical" to formatBytes(ms.logicalBytes))
+                add("Kernel read" to formatBytes(ms.kernelReadBytes))
+                if (isWrite) add("Kernel write" to formatBytes(ms.kernelWriteBytes))
+                add("Major faults" to formatCount(ms.majFaults))
+                add("Minor faults" to formatCount(ms.minFaults))
+                if (isWrite && ms.majFaults > 0)
+                    add("bytes/fault" to formatBytes(ms.bytesPerFault.toLong()))
+            }
+            rows.forEach { (label, value) ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(start = 28.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(label, style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        value,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun HeadlineMetric(label: String, value: String) {
+    Column {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            color = MaterialTheme.colorScheme.primary,
+        )
+    }
+}
+
 @Composable
 private fun CategoryResultCard(
     title: String,

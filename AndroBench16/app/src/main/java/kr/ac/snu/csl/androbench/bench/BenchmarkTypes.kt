@@ -10,6 +10,12 @@ enum class BenchmarkMode{
     FIO_SEQ_WRITE,
     FIO_RND_READ,
     FIO_RND_WRITE,
+
+    //mmap engine by fio
+    FIO_MMAP_SEQ_READ,
+    FIO_MMAP_RND_READ,
+    FIO_MMAP_SEQ_WRITE,
+    FIO_MMAP_RND_WRITE,
 }
 
 //defines the configuration for running the benchmark
@@ -23,6 +29,7 @@ data class BenchmarkConfig(
     val numIterations: Int=3,
     val sqliteOperations: Int=1024,
     val mode: BenchmarkMode = BenchmarkMode.ALL,
+    val mmapReadaheadOn: Boolean=false, //whether to readahead
 )
 //latency state
 data class LatencyStats(
@@ -69,6 +76,8 @@ data class BenchmarkResult(
     val fioWriteMBps: Double = 0.0,
     val fioWriteIops: Double = 0.0,
 
+    //mmap stats
+    val mmapStats: MmapStats?= null,
     //latency stats
     val rndReadLatency: LatencyStats?=null,
     val rndWriteLatency: LatencyStats?=null,
@@ -101,4 +110,21 @@ sealed class BenchmarkState {
 
     data class Done(val result: BenchmarkResult): BenchmarkState()
     data class Error(val message: String): BenchmarkState()
+}
+
+data class MmapStats(
+    val logicalBytes: Long, //app requested bytes
+    val kernelReadBytes: Long, //actual bytes read from the storage
+    val kernelWriteBytes: Long=0, //end_fsync -> flush
+    val majFaults: Int, //storage IO needed
+    val minFaults: Int, //mapping
+    val pageSizeBytes: Int,
+    val readaheadOn: Boolean=false, //측정 당시 readahead 축 (OFF=순수 페이지 단위)
+){
+    //Read amplification factor
+    val ra: Double get()=if(logicalBytes>0) kernelReadBytes.toDouble()/logicalBytes else 0.0
+    //fault 1회당 kernel read bytes
+    val bytesPerFault: Double get()=if (majFaults>0) kernelReadBytes.toDouble()/majFaults else 0.0
+    val waf: Double get()=if(logicalBytes>0) kernelWriteBytes.toDouble()/logicalBytes else 0.0
+
 }

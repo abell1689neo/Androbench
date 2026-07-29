@@ -265,7 +265,7 @@ private fun FioDetail(record: HistoryRecord) {
                 DetailRow("WAF", "%.3f".format(waf))
                 DetailRow("RMW read", "%.3f".format(ra))
             } else {
-                DetailRow("RA", "%.3f".format(ra))
+                DetailRow("RAF", "%.3f".format(ra))
             }
             if (record.mmapMajFaults > 0) {
                 DetailRow("bytes/fault",

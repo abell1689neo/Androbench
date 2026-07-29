@@ -180,17 +180,12 @@ private fun IdleContent(
         }
     }
     Spacer(modifier = Modifier.height(8.dp))
-    SectionHeader("mmap (page cache · RA/WAF)")
-    Text(
-        if (config.mmapReadaheadOn) "readahead ON — 실전 모드" else "readahead OFF — 순수 페이지 단위",
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    SectionHeader("mmap (page cache · RAF/WAF)")
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             CategoryCard(
                 label = "mmap Seq R",
-                subtitle = "fault·RA 측정",
+                subtitle = "fault·RAF 측정",
                 icon = Icons.Default.Memory,
                 enabled = canRun(BenchmarkMode.FIO_MMAP_SEQ_READ),
                 onClick = { onStart(BenchmarkMode.FIO_MMAP_SEQ_READ) },
@@ -198,7 +193,7 @@ private fun IdleContent(
             )
             CategoryCard(
                 label = "mmap Rnd R",
-                subtitle = "fault·RA 측정",
+                subtitle = "fault·RAF 측정",
                 icon = Icons.Default.Memory,
                 enabled = canRun(BenchmarkMode.FIO_MMAP_RND_READ),
                 onClick = { onStart(BenchmarkMode.FIO_MMAP_RND_READ) },

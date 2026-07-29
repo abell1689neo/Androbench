@@ -968,7 +968,7 @@ private fun MmapAccountingCard(
                 }
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    HeadlineMetric("RA", "%.3f".format(ms.ra))
+                    HeadlineMetric("RAF", "%.3f".format(ms.ra))
                     HeadlineMetric("bytes/fault", formatBytes(ms.bytesPerFault.toLong()))
                 }
             }

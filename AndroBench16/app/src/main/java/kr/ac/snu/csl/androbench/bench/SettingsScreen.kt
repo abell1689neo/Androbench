@@ -104,7 +104,7 @@ fun SettingsCard(
         }
 
         // ── mmap 엔진 전용 (페이지 캐시 경유 — fault 회계) ──
-        GroupLabel("mmap 전용 (page cache · RA/WAF)")
+        GroupLabel("mmap 전용 (page cache · RAF/WAF)")
 
         SettingSection(title = "mmap", icon = Icons.Default.Memory) {
             ChipSetting(

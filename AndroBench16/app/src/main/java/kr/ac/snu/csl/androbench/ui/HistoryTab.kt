@@ -240,6 +240,9 @@ private fun FioDetail(record: HistoryRecord) {
         DetailRow("Operation", if (isWrite) "Write" else "Read")
         if (isMmap) {
             DetailRow("Readahead", if (record.mmapReadaheadOn) "ON" else "OFF (pure page)")
+        } else {
+            DetailRow("Engine", record.fioEngine +
+                if (record.fioEngine == "libaio") " (QD ${record.fioIoDepth})" else " (QD 1)")
         }
     }
 

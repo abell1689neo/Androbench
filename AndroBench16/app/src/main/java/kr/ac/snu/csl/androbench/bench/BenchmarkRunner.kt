@@ -216,6 +216,8 @@ class BenchmarkRunner(private val context: Context) {
         onProgress("fio: ${config.mode.name}", 1, 1, 0, 0)
 
         //fio 인자 조립
+        val engine=config.fioEngine //libaio
+
         val isWrite =
             config.mode in listOf(BenchmarkMode.FIO_SEQ_WRITE, BenchmarkMode.FIO_RND_WRITE)
         val isRandom =
@@ -227,8 +229,10 @@ class BenchmarkRunner(private val context: Context) {
             else -> "read"
         }
         val blockSize = if (isRandom) config.rndReclenKb else config.seqReclenKb
-        val numjobs = if (isRandom) config.numThreads else 1 //seq일때는 thread 1개로 진행
-
+        //numjobs는 엔진 무관하게 config를 따름 (libaio에선 합산 QD = numjobs × iodepth 유의)
+        val numjobs = if (isRandom) config.numThreads else 1
+        val ioDepth=if(engine=="libaio")
+            (if(isRandom) config.rndIoDepth else config.seqIoDepth) else 1
         //1.prepare file
         onProgress("fio: prep", 1, 1, 0, 0)
         val prepTargets = if (isRandom) //random: 개별 파일 사용
@@ -256,7 +260,7 @@ class BenchmarkRunner(private val context: Context) {
                 "--size=${config.fileSizeKb}k",
                 //"--filename=$testFile",
                 "--direct=1",//o_direct
-                "--ioengine=psync",//why psync?
+                "--ioengine=$engine",//why psync?
                 "--thread",
                 "--numjobs=$numjobs",
                 "--loops=${config.numIterations}",
@@ -269,6 +273,9 @@ class BenchmarkRunner(private val context: Context) {
                 //"--time_based",
                 //"--ramp_time=2",//eliminate warmup effect
             )
+            if(engine=="libaio"){
+                args.add("--iodepth=$ioDepth")
+            }
             //batched sync: loop(파일 1바퀴)당 fdatasync 1회 — op당 sync는 캐시 왜곡 대비 과한 스로틀
             val opsPerLoop = if (isRandom) {
                 config.rndMaxRecs

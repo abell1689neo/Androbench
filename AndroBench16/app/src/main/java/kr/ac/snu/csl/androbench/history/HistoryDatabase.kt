@@ -8,7 +8,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 //table in this db, schema version,
-@Database (entities=[HistoryRecord::class], version=4, exportSchema = false)
+@Database (entities=[HistoryRecord::class], version=5, exportSchema = false)
 abstract class HistoryDatabase: RoomDatabase() {//roomdatabase 상속
     abstract fun historyDao(): HistoryDao//interface 구현부-> 호출 시 instance생성
 
@@ -27,13 +27,21 @@ abstract class HistoryDatabase: RoomDatabase() {//roomdatabase 상속
             }
         }
 
+        //v4→v5: fio 엔진/QD 컬럼 — psync·libaio 런 구분 (ALTER라 기존 기록 보존)
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE bench_history ADD COLUMN fioEngine TEXT NOT NULL DEFAULT 'psync'")
+                db.execSQL("ALTER TABLE bench_history ADD COLUMN fioIoDepth INTEGER NOT NULL DEFAULT 1")
+            }
+        }
+
         fun get(context: Context): HistoryDatabase=
             INSTANCE?:synchronized(this){//locking
                 INSTANCE?:Room.databaseBuilder(
                     context.applicationContext,
                     HistoryDatabase::class.java,
                     "androbench_history.db"
-                ).addMigrations(MIGRATION_3_4)
+                ).addMigrations(MIGRATION_3_4, MIGRATION_4_5)
                     .fallbackToDestructiveMigration() //마이그레이션 없는 버전 점프만 파괴적
                     .build().also{INSTANCE=it} //instance에 저장
 

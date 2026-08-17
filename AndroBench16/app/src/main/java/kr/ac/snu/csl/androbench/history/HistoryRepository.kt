@@ -47,6 +47,17 @@ class HistoryRepository(context: Context) {//constructor
             fioReadIops = result.fioReadIops,
             fioWriteIops = result.fioWriteIops,
             fioWriteMBps = result.fioWriteMBps,
+            //엔진/QD 기록 — 런 구분용
+            fioEngine = when {
+                result.mode.name.startsWith("FIO_MMAP") -> "mmap"
+                result.mode.name.startsWith("FIO_") -> config.fioEngine
+                else -> "native"
+            },
+            fioIoDepth = if (result.mode.name.startsWith("FIO_") &&
+                             !result.mode.name.startsWith("FIO_MMAP") &&
+                             config.fioEngine == "libaio")
+                             (if ("RND" in result.mode.name) config.rndIoDepth else config.seqIoDepth)
+                         else 1,
             //mmap 커널 회계 (비 mmap 모드는 기본값 유지)
             mmapReadaheadOn = result.mmapStats?.readaheadOn ?: false,
             mmapLogicalBytes = result.mmapStats?.logicalBytes ?: 0,

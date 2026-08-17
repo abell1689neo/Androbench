@@ -21,15 +21,20 @@ enum class BenchmarkMode{
 //defines the configuration for running the benchmark
 data class BenchmarkConfig(
     val targetPath: String, //directory to make test file
-    val seqReclenKb: Int=32, //Sequential R/W record size — UFS 표준
+    val seqReclenKb: Int=1024, //Sequential R/W record size — 1MB (장치 최대 BW 측정 관례, Seq1M)
     val rndReclenKb: Int=4,  //Random R/W record size — UFS page size
     val fileSizeKb: Int=2097152,  //2 GB — Pixel 9 어디서나 안전 (NativeIO 4 threads × 2 GB = 8 GB)
-    val numThreads: Int=4,         //4 — Random parallelism QD=4 + NativeIO 디스크 8 GB
+    val numThreads: Int=8,         //8 — Random 병렬 job (교수님 지정: nj8·QD32). 디스크 8×2GB=16GB 주의
     val rndMaxRecs: Int=16384,     //working set = 4 × 16384 × 4 KB = 256 MB ≥ SRAM 64 MB
     val numIterations: Int=3,
     val sqliteOperations: Int=1024,
     val mode: BenchmarkMode = BenchmarkMode.ALL,
     val mmapReadaheadOn: Boolean=false, //whether to readahead
+
+    //libaio setting
+    val fioEngine: String = "libaio",
+    val seqIoDepth: Int = 4,
+    val rndIoDepth: Int = 32,
 )
 //latency state
 data class LatencyStats(

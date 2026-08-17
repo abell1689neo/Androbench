@@ -64,11 +64,11 @@ fun SettingsCard(
                 onChange = { onConfigChange(config.copy(fileSizeKb = it)) },
             )
             ChipSetting(
-                label = "Sequential block size",
-                options = listOf(4, 8, 16, 32, 64, 128, 256),
+                label = "Sequential block size (최대 BW 측정 관례 = 1 MB)",
+                options = listOf(4, 16, 32, 64, 128, 256, 512, 1024),
+                display = { if (it >= 1024) "${it / 1024} MB" else "$it KB" },
                 current = config.seqReclenKb,
                 onChange = { onConfigChange(config.copy(seqReclenKb = it)) },
-                unitLabel = " KB",
             )
             ChipSetting(
                 label = "Random block size",
@@ -90,7 +90,28 @@ fun SettingsCard(
 
         SettingSection(title = "Direct I/O", icon = Icons.Default.Build) {
             ChipSetting(
-                label = "Threads (Random 병렬 job — Sequential 1 고정, mmap 미적용)",
+                label = "Engine (psync = QD1 동기 · libaio = 비동기 deep QD, numjobs 1 고정)",
+                options = listOf(0, 1),
+                display = { if (it == 1) "libaio" else "psync" },
+                current = if (config.fioEngine == "libaio") 1 else 0,
+                onChange = { onConfigChange(config.copy(fioEngine = if (it == 1) "libaio" else "psync")) },
+            )
+            if (config.fioEngine == "libaio") {
+                ChipSetting(
+                    label = "Sequential QD (iodepth — 저QD로 포화)",
+                    options = listOf(1, 2, 4, 8, 16),
+                    current = config.seqIoDepth,
+                    onChange = { onConfigChange(config.copy(seqIoDepth = it)) },
+                )
+                ChipSetting(
+                    label = "Random QD (iodepth — UFS 큐 포화 지점 부근)",
+                    options = listOf(8, 16, 32, 64, 128),
+                    current = config.rndIoDepth,
+                    onChange = { onConfigChange(config.copy(rndIoDepth = it)) },
+                )
+            }
+            ChipSetting(
+                label = "Threads (Random 병렬 job — libaio에선 합산 QD = Threads × QD)",
                 options = listOf(1, 2, 4, 8, 16, 32),
                 current = config.numThreads,
                 onChange = { onConfigChange(config.copy(numThreads = it)) },

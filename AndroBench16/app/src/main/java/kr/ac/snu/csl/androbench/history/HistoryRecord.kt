@@ -48,6 +48,10 @@ data class HistoryRecord(
     val fioWriteMBps: Double = 0.0,
     val fioWriteIops: Double = 0.0,
 
+    //fio 엔진 정보 — psync/libaio 런 구분용 (mmap 모드는 "mmap", native는 "native")
+    val fioEngine: String = "psync",
+    val fioIoDepth: Int = 1,   //libaio일 때 실효 QD (psync/mmap=1)
+
     //results (mmap 커널 회계) — 4k/16k 커널 비교 대장부용
     val mmapReadaheadOn: Boolean = false,
     val mmapLogicalBytes: Long = 0,

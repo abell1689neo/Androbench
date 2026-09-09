@@ -33,8 +33,14 @@ data class BenchmarkConfig(
 
     //libaio setting
     val fioEngine: String = "libaio",
-    val seqIoDepth: Int = 4,
+    val seqIoDepth: Int = 16, //Awake 스윕 실측: QD4 2590 → QD16 3050 MB/s (2026-08-26, 57231 유닛). QD32는 변동 커서 16 채택
     val rndIoDepth: Int = 32,
+
+    //campaign
+    val campaignMode: Boolean =false,
+    val campaignRuns: Int =10, 
+    val campaignTermSec: Int = 60,
+    val cpuPinning: Boolean=true,
 )
 //latency state
 data class LatencyStats(
@@ -87,6 +93,8 @@ data class BenchmarkResult(
     val rndReadLatency: LatencyStats?=null,
     val rndWriteLatency: LatencyStats?=null,
     val fioLatency: LatencyStats?=null,
+    //campaign mode only
+    val campaign: CampaignSummary?=null,
     )
 
 //saves the progress of benchmark
@@ -133,3 +141,14 @@ data class MmapStats(
     val waf: Double get()=if(logicalBytes>0) kernelWriteBytes.toDouble()/logicalBytes else 0.0
 
 }
+//campaign 요약 — 대표값은 mean (GC로 꺼진 런도 "사용자가 겪는 성능"의 일부라 버리지 않음)
+data class CampaignSummary(
+    val runs: Int, //회차 
+    val termSec: Int,
+    val primaryLabel: String,   //"MB/s"(seq) or "IOPS"(rnd)
+    val mean: Double,
+    val cvPercent: Double,      //표본표준편차/mean×100 — 저쪽 팀의 "CV 0.5%"와 같은 정의
+    val min: Double,
+    val max: Double,
+    val perRun: List<Double>,   //런별 원값 (그래프/이상치 확인용)
+)

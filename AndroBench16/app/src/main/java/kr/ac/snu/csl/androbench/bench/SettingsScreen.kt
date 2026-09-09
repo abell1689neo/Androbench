@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.DataUsage
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Timeline
@@ -72,7 +73,7 @@ fun SettingsCard(
             )
             ChipSetting(
                 label = "Random block size",
-                options = listOf(4, 8, 16, 32, 64),
+                options = listOf(4, 8, 16, 32, 64, 256), //256: 16K페이지×16연발 — 디바이스 선읽기 발동 검증용 (nios≤8192 필요)
                 current = config.rndReclenKb,
                 onChange = { onConfigChange(config.copy(rndReclenKb = it)) },
                 unitLabel = " KB",
@@ -141,6 +142,41 @@ fun SettingsCard(
                         "ops 수 · readahead뿐.",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        // ── Campaign (일반 사용자 모드) ──
+        GroupLabel("Campaign (trim 없이 N회 연속 — 일반 사용자 관점)")
+
+        SettingSection(title = "Campaign", icon = Icons.Default.Refresh) {
+            ChipSetting(
+                label = "Campaign 모드 (fio 단일 벤치 전용 — ALL/SQLite 제외)",
+                options = listOf(0, 1),
+                display = { if (it == 1) "ON" else "OFF" },
+                current = if (config.campaignMode) 1 else 0,
+                onChange = { onConfigChange(config.copy(campaignMode = it == 1)) },
+            )
+            if (config.campaignMode) {
+                ChipSetting(
+                    label = "Runs (반복 횟수)",
+                    options = listOf(5, 10, 20),
+                    current = config.campaignRuns,
+                    onChange = { onConfigChange(config.copy(campaignRuns = it)) },
+                )
+                ChipSetting(
+                    label = "Term (런 간 대기 — 고정값 자체가 통제 조건)",
+                    options = listOf(0, 30, 60, 120),
+                    display = { "${it}s" },
+                    current = config.campaignTermSec,
+                    onChange = { onConfigChange(config.copy(campaignTermSec = it)) },
+                )
+            }
+            ChipSetting(
+                label = "CPU pinning (direct measure를 mid+big 4-7 고정)",
+                options = listOf(0, 1),
+                display = { if (it == 1) "ON" else "OFF" },
+                current = if (config.cpuPinning) 1 else 0,
+                onChange = { onConfigChange(config.copy(cpuPinning = it == 1)) },
             )
         }
 

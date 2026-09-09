@@ -276,6 +276,10 @@ class BenchmarkRunner(private val context: Context) {
             if(engine=="libaio"){
                 args.add("--iodepth=$ioDepth")
             }
+            //HMP 코어 배치 랜덤성 제거 (mid+big 고정) — 리틀 코어에 제출 스레드가 앉는 런을 배제
+            if(config.cpuPinning){
+                args.add("--cpus_allowed=4-7")
+            }
             //batched sync: loop(파일 1바퀴)당 fdatasync 1회 — op당 sync는 캐시 왜곡 대비 과한 스로틀
             val opsPerLoop = if (isRandom) {
                 config.rndMaxRecs
@@ -364,6 +368,7 @@ class BenchmarkRunner(private val context: Context) {
                     "--ioengine=psync",
                     "--thread",
                     "--fallocate=none",
+                    "--end_fsync=1"
                 )
             )
 

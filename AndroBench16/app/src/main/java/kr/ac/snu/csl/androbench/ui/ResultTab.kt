@@ -107,6 +107,29 @@ private fun ResultBody(result: BenchmarkResult) {
             engine = if (isMmap) "mmap engine · page cache 경로" else "fio · O_DIRECT 경로",
         )
 
+        //── campaign 요약 (campaign 모드로 돌렸을 때만 존재) — 아래 지표 카드는 마지막 런 값 ──
+        result.campaign?.let { c ->
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(12.dp)) {
+                    Text(
+                        "Campaign ${c.runs}회 · term ${c.termSec}s",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        "mean %.1f %s  ·  CV %.1f%%".format(c.mean, c.primaryLabel, c.cvPercent),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Text(
+                        "min %.1f · max %.1f (n=${c.runs})".format(c.min, c.max),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
         SubLabel("Throughput")
         MetricRowsCard(
             rows = if (isFioWrite)
